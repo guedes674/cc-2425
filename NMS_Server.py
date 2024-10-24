@@ -1,42 +1,47 @@
 import socket
 import struct
+import json
 
-def start_server():
+def start_server_udp():
+    server_socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    LOCAL_ADR = "10.0.5.10"
+    server_socket.bind((LOCAL_ADR, 8080))
+
+    print("Servidor esperando por conexões...")
+
+    while True:
+        msg, clientAdress = server_socket.recvfrom(1024)
+        print(clientAdress)
+        if not msg:
+            break
+        print(f"Recebido: {msg.decode()}")
+
+def start_server_tcp():
     server_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     LOCAL_ADR = "10.0.5.10"
     server_socket.bind((LOCAL_ADR, 8080))
     server_socket.listen(1)
 
-    print("ola")
     print("Servidor esperando por conexões...")
-
     conn, addr = server_socket.accept()
     print(f"Conectado por {addr}")
 
     while True:
-        data = conn.recv(1024)
-        if not data:
+        msg = conn.recv(1024)
+        if not msg:
             break
-        print(f"Recebido: {data.decode()}")
-        conn.sendall(data)  # Echo de volta para o cliente
-
+        decoded_json = msg.decode('utf-8')
+        try:
+            parsed_json = json.loads(decoded_json)
+            print(type(parsed_json))
+            print(f"Recebido: {parsed_json}")
+        except json.JSONDecodeError as e:
+            print(f"Erro ao decodificar JSON: {e}")
+        conn.sendall(msg)   
     conn.close()
 
-start_server()
+a = input("0 - TCP , 1 - UDP :\n")
 
-""" def send_alert(alert_id, alert_type, severity, message):
-    server_address = ('localhost', 8080)
-    timestamp = int(time.time())
-    header = struct.pack('!I B B I H', alert_id, alert_type, severity, timestamp, 0)
-    payload = message.encode()
-    
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.connect(server_address)
-        sock.sendall(header + payload)
-        response = sock.recv(1024)
-        print(f"Resposta do servidor: {response.decode()}")
-    finally:
-        sock.close() """
-
-""" send_alert(1, 0x01, 0x01, "Erro crítico no sistema") """
+if a : 
+    start_server_tcp()
+else : start_server_udp()
