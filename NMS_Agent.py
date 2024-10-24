@@ -1,20 +1,30 @@
 import socket
+import json
+def connect_udp():
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    while (True):
+        
+        a = input("Message : ")
+        message = {
+            "Message" : a,
+            "Address" : "Ola"
+        }
+        server_socket.sendto(bytes(message,encoding='utf-8'),('10.0.5.10', 8080))
 
-def connect():
+def connect_tcp():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.connect(('10.0.5.10', 8080))
-    server_socket.sendall(b"hello")
+    while (True):
+        a = input("Message : ")
+        message = {
+            "Message" : a,
+            "Address" : "Ola"
+        }
+        json_message = json.dumps(message)
+        server_socket.sendall(bytes(str(json_message),encoding='utf-8'))
 
-connect()
+b = input("0 - TCP , 1 - UDP :\n")
 
-""" def send_net_task(task_id, task_type, flags, data):
-    server_address = ('localhost', 12345)
-    message = struct.pack('!I B B H', task_id, task_type, flags, 0) + data.encode()
-    
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.sendto(message, server_address)
-    finally:
-        sock.close()
- """
-""" send_net_task(1, 0x01, 0x01, "Ping data") """
+if b : 
+    connect_tcp()
+else : connect_udp()
