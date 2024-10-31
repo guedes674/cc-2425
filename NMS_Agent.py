@@ -1,15 +1,23 @@
 import socket
 import json
+from Message import Mensagem
+
 def connect_udp():
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    while (True):
+    while True:
+        a = input("Mensagem: ")
         
-        a = input("Message : ")
-        message = {
-            "Message" : a,
-            "Address" : "Ola"
-        }
-        server_socket.sendto(bytes(message,encoding='utf-8'),('10.0.5.10', 8080))
+        # Criar a mensagem com protocolo, tipo, dados, identificador e sequência
+        message = Mensagem("NetTask", "tipo", a, identificador=1, sequencia=1234)
+        
+        # Usar o método enviar_com_ack para enviar a mensagem com controle de fluxo e ACK
+        ack_recebido = message.enviar_com_ack('10.0.5.10', 8080)
+
+        # Confirmação do envio
+        if ack_recebido:
+            print("ACK recebido.")
+        else:
+            print("Falha ao enviar a mensagem após múltiplas tentativas.")
+
 
 def connect_tcp():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -23,8 +31,8 @@ def connect_tcp():
         json_message = json.dumps(message)
         server_socket.sendall(bytes(str(json_message),encoding='utf-8'))
 
-b = input("0 - TCP , 1 - UDP :\n")
+b = int(input("0 - TCP , 1 - UDP :\n"))
 
-if b : 
+if not b : 
     connect_tcp()
 else : connect_udp()

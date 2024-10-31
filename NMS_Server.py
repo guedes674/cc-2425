@@ -1,6 +1,7 @@
 import socket
 import struct
 import json
+from Message import Mensagem
 
 def start_server_udp():
     server_socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -10,11 +11,24 @@ def start_server_udp():
     print("Servidor esperando por conexões...")
 
     while True:
-        msg, clientAdress = server_socket.recvfrom(1024)
-        print(clientAdress)
+        msg, client_address = server_socket.recvfrom(1024)
         if not msg:
             break
-        print(f"Recebido: {msg.decode()}")
+        
+        print(f"Mensagem recebida de {client_address}")
+
+        # Desserializar a mensagem recebida
+        try:
+            sequencia, identificador, dados = Mensagem.desserialize_udp(msg)
+            print(f"Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados.decode('utf-8')}")
+
+            # Enviar um ACK de volta para o cliente
+            ack_message = struct.pack('!I H', sequencia, identificador)
+            server_socket.sendto(ack_message, client_address)
+            print("ACK enviado para o cliente.")
+        
+        except struct.error as e:
+            print("Erro ao desserializar a mensagem:", e)
 
 def start_server_tcp():
     server_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -40,8 +54,8 @@ def start_server_tcp():
         conn.sendall(msg)   
     conn.close()
 
-a = input("0 - TCP , 1 - UDP :\n")
+a = int(input("0 - TCP , 1 - UDP :\n"))
 
-if a : 
+if not a : 
     start_server_tcp()
 else : start_server_udp()
