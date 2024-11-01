@@ -7,11 +7,11 @@
 
 <div align="center">
 
-| Nome             | Número |
-|------------------|--------|
-| Tiago Carneiro   | A93207 |
-| Tiago Guedes     | A97369 |
-| ---------------- | A00000 |
+| Nome             | Número  |
+|------------------|---------|
+| Tiago Carneiro   | A93207  |
+| Tiago Guedes     | A97369  |
+| Hugo Gomes       | PG57549 |
 
 </div>
 # CC2425-Grupo-2
