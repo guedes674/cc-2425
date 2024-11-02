@@ -1,13 +1,13 @@
 import socket
 import json
-from Message import Mensagem
+from NetTask import UDP
 
 def connect_udp():
     while True:
         a = input("Mensagem: ")
         
         # Criar a mensagem com protocolo, tipo, dados, identificador e sequência
-        message = Mensagem("NetTask", "tipo", a, identificador=1, sequencia=1234)
+        message = UDP("tipo", a, identificador=1, sequencia=1234)
         
         # Usar o método enviar_com_ack para enviar a mensagem com controle de fluxo e ACK
         ack_recebido = message.enviar_com_ack('10.0.5.10', 8080)
