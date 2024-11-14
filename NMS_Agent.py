@@ -1,5 +1,6 @@
 import socket
 import json
+import subprocess
 from NetTask import UDP
 
 def connect_udp():
@@ -30,6 +31,32 @@ def connect_tcp():
         }
         json_message = json.dumps(message)
         server_socket.sendall(bytes(str(json_message),encoding='utf-8'))
+
+def ping(host, num):
+    try:
+        command = ['ping', host]
+        if num is not None:
+            command += ['-c', str(num)]
+
+        # Executa o comando e captura a saída
+        output = subprocess.check_output(command, universal_newlines=True)
+        return output
+    except subprocess.CalledProcessError:
+        print(f"Erro ao executar o ping")
+        return None
+
+def iperf(host, num):
+    try:
+        command = ['iperf', '-c', host]
+        if num is not None:
+            command += ['-t', str(num)]
+
+        # Executa o comando e captura a saída
+        output = subprocess.check_output(command, universal_newlines=True)
+        return output
+    except subprocess.CalledProcessError:
+        print(f"Erro ao executar o iperf")
+        return None
 
 b = int(input("0 - TCP , 1 - UDP :\n"))
 
