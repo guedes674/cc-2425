@@ -4,31 +4,41 @@ import time
 
 class UDP:
     def __init__(self, tipo, dados, identificador=None, sequencia=None):
-        self.tipo = tipo                    # Tipo de mensagem (por exemplo, 'register', 'colect', 'alert')
-        self.dados = dados.encode('utf-8')  # Conteúdo da mensagem
-        self.identificador = identificador  # ID do NMS_Agent
-        self.sequencia = sequencia          # Número de sequência para NetTask (UDP)
+        self.tipo = tipo                         # Tipo de mensagem (por exemplo, 'register', 'colect', 'alert')
+        self.dados = dados.encode('utf-8')       # Conteúdo da mensagem
+        self.identificador = str(identificador)  # ID do NMS_Agent
+        self.sequencia = sequencia               # Número de sequência para NetTask (UDP)
  
     # --------------------------- UDP ---------------------------
-    
-    
+
     # Antes de enviar um pacote, devemos serializá-lo (mudar para formato binário)
     def serialize(self):
+        id_bytes = self.identificador.encode('utf-8')  
+        tamanho_identificador = len(id_bytes)
         tamanho_dados = len(self.dados)
-        formato = f'!I H H {tamanho_dados}s'  # Formato binário
-        return struct.pack(formato, self.sequencia, self.identificador, tamanho_dados, self.dados)
+        formato = f'!I H H {tamanho_identificador}s {tamanho_dados}s'  # Formato ajustado para incluir identificador como string
+        return struct.pack(formato, self.sequencia, tamanho_identificador, tamanho_dados, id_bytes, self.dados)
 
     # Uma vez que a mensagem esteja em formato binário, é necessário 'desformatá-la'
     @staticmethod
     def desserialize(mensagem_binaria):
-        sequencia, identificador, tamanho_dados = struct.unpack('!I H H', mensagem_binaria[:8])
-        dados = struct.unpack(f'{tamanho_dados}s', mensagem_binaria[8:])[0]
+        # Primeiro extrai os tamanhos dos campos
+        sequencia, tamanho_identificador, tamanho_dados = struct.unpack('!I H H', mensagem_binaria[:8])
+        
+        # Define o formato dinâmico para o conteúdo com base nos tamanhos extraídos
+        formato = f'{tamanho_identificador}s {tamanho_dados}s'
+        id_bytes, dados_bytes = struct.unpack(formato, mensagem_binaria[8:])
+        
+        # Decodifica os bytes para strings
+        identificador = id_bytes.decode('utf-8')
+        dados = dados_bytes.decode('utf-8')
+        
         return sequencia, identificador, dados
 
     # Enviar uma mensagem UDP com controle de fluxo e esperar pelo ACK
     def send_message(self, endereco, porta, max_retries=3, timeout=2, delay=0.5):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(timeout)  # Define o timeout para aguardar o ACK
+        sock.settimeout(timeout)             # Define o timeout para aguardar o ACK
         mensagem_binaria = self.serialize()  # Serializa a mensagem para binário
         
         tentativas = 0
@@ -66,5 +76,11 @@ class UDP:
         if not ack_recebido:
             print("Falha ao receber ACK após várias tentativas")
         return ack_recebido
-1
 
+
+    # --------------------------- Mensagens ---------------------------
+    # Mensagem de tipo 1 - registo
+    def registo(self, endereco, porta):
+        print(f"Registo do NMS_Agent com ID {self.identificador} no NMS_Server...")
+        register_message = UDP(1, "", id, 1)
+        register_message.send_message(endereco, porta)

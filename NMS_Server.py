@@ -105,7 +105,7 @@ class NMS_Server:
         #from threading import Thread
         #Thread(target=self.start_udp_server).start()
         #Thread(target=self.start_tcp_server).start()
-        
+        self.start_udp_server()
         self.start_server()
 
 # Executando o servidor NMS
