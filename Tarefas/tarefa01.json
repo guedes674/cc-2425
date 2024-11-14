@@ -1,103 +1,196 @@
 {
-    "Task": {
-      "task_id": "task-01",
-      "frequency": 20,
-      "devices": [
-        {
-          "device_id": "r1",
-          "device_metrics": {
-            "cpu_usage": true,
-            "ram_usage": true,
-            "interface_stats": ["eth0", "eth1"]
+  "Task": {
+    "task_id": "task-01",
+    "frequency": 20,
+    "devices": [
+      {
+        "device_id": "r1",
+        "device_metrics": {
+          "cpu_usage": true,
+          "ram_usage": true,
+          "interface_stats": ["eth0", "eth1"]
+        },
+        "link_metrics": {
+          "bandwidth": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 10,
+            "transport": "udp",
+            "frequency": 30
           },
-          "link_metrics": {
-            "bandwidth": {
-              "tool": "iperf",
-              "mode": "client",
-              "server_address": "192.168.1.1",
-              "duration": 10,
-              "transport": "udp",
-              "frequency": 30
-            },
-            "jitter": {
-              "tool": "iperf",
-              "mode": "client",
-              "server_address": "192.168.1.1",
-              "duration": 10,
-              "transport": "udp",
-              "frequency": 30
-            },
-            "packet_loss": {
-              "tool": "iperf",
-              "mode": "client",
-              "server_address": "192.168.1.1",
-              "duration": 10,
-              "transport": "udp",
-              "frequency": 30
-            },
-            "latency": {
-              "tool": "ping",
-              "destination": "192.168.1.1",
-              "count": 4,
-              "frequency": 60
-            }
+          "jitter": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 10,
+            "transport": "udp",
+            "frequency": 30
           },
-          "alertflow_conditions": {
-            "cpu_usage": 80,
-            "ram_usage": 90,
-            "interface_stats": 2000,
-            "packet_loss": 5,
-            "jitter": 100
+          "packet_loss": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 10,
+            "transport": "udp",
+            "frequency": 30
+          },
+          "latency": {
+            "tool": "ping",
+            "destination": "10.0.5.10",
+            "count": 4,
+            "frequency": 60
           }
         },
-        {
-          "device_id": "r2",
-          "device_metrics": {
-            "cpu_usage": true,
-            "ram_usage": false,
-            "interface_stats": ["eth0", "eth2"]
-          },
-          "link_metrics": {
-            "bandwidth": {
-              "tool": "iperf",
-              "mode": "server",
-              "server_address": "192.168.2.1",
-              "duration": 15,
-              "transport": "tcp",
-              "frequency": 45
-            },
-            "jitter": {
-              "tool": "iperf",
-              "mode": "server",
-              "server_address": "192.168.2.1",
-              "duration": 15,
-              "transport": "tcp",
-              "frequency": 45
-            },
-            "packet_loss": {
-              "tool": "iperf",
-              "mode": "server",
-              "server_address": "192.168.2.1",
-              "duration": 15,
-              "transport": "tcp",
-              "frequency": 45
-            },
-            "latency": {
-              "tool": "ping",
-              "destination": "192.168.2.1",
-              "count": 5,
-              "frequency": 120
-            }
-          },
-          "alertflow_conditions": {
-            "cpu_usage": 85,
-            "ram_usage": 95,
-            "interface_stats": 2500,
-            "packet_loss": 4,
-            "jitter": 150
-          }
+        "alertflow_conditions": {
+          "cpu_usage": 80,
+          "ram_usage": 90,
+          "interface_stats": 2000,
+          "packet_loss": 5,
+          "jitter": 100
         }
-      ]
-    }
+      },
+      {
+        "device_id": "r2",
+        "device_metrics": {
+          "cpu_usage": true,
+          "ram_usage": false,
+          "interface_stats": ["eth0", "eth2"]
+        },
+        "link_metrics": {
+          "bandwidth": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 15,
+            "transport": "tcp",
+            "frequency": 45
+          },
+          "jitter": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 15,
+            "transport": "tcp",
+            "frequency": 45
+          },
+          "packet_loss": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 15,
+            "transport": "tcp",
+            "frequency": 45
+          },
+          "latency": {
+            "tool": "ping",
+            "destination": "10.0.5.10",
+            "count": 5,
+            "frequency": 120
+          }
+        },
+        "alertflow_conditions": {
+          "cpu_usage": 85,
+          "ram_usage": 95,
+          "interface_stats": 2500,
+          "packet_loss": 4,
+          "jitter": 150
+        }
+      },
+      {
+        "device_id": "r3",
+        "device_metrics": {
+          "cpu_usage": true,
+          "ram_usage": true,
+          "interface_stats": ["eth1", "eth2"]
+        },
+        "link_metrics": {
+          "bandwidth": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 10,
+            "transport": "udp",
+            "frequency": 30
+          },
+          "jitter": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 10,
+            "transport": "udp",
+            "frequency": 30
+          },
+          "packet_loss": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 10,
+            "transport": "udp",
+            "frequency": 30
+          },
+          "latency": {
+            "tool": "ping",
+            "destination": "10.0.5.10",
+            "count": 4,
+            "frequency": 60
+          }
+        },
+        "alertflow_conditions": {
+          "cpu_usage": 70,
+          "ram_usage": 85,
+          "interface_stats": 3000,
+          "packet_loss": 6,
+          "jitter": 120
+        }
+      },
+      {
+        "device_id": "r4",
+        "device_metrics": {
+          "cpu_usage": true,
+          "ram_usage": true,
+          "interface_stats": ["eth0", "eth2"]
+        },
+        "link_metrics": {
+          "bandwidth": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 10,
+            "transport": "udp",
+            "frequency": 30
+          },
+          "jitter": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 10,
+            "transport": "udp",
+            "frequency": 30
+          },
+          "packet_loss": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.5.10",
+            "duration": 10,
+            "transport": "udp",
+            "frequency": 30
+          },
+          "latency": {
+            "tool": "ping",
+            "destination": "10.0.5.10",
+            "count": 4,
+            "frequency": 60
+          }
+        },
+        "alertflow_conditions": {
+          "cpu_usage": 75,
+          "ram_usage": 80,
+          "interface_stats": 3500,
+          "packet_loss": 3,
+          "jitter": 130
+        }
+      }
+    ]
   }
-  
+}

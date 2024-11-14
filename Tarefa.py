@@ -1,4 +1,3 @@
-import socket
 import json
 import time
 from AlertFlow import TCP
