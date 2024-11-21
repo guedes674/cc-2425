@@ -86,27 +86,25 @@ class Tarefa:
         jitter = self.get_link_jitter(device_id)
         if jitter > alertflow_conditions['jitter']:
             TCP.trigger_alert(device_id, "Jitter exceeded", jitter)
-    
-
-
-
 
     # Implementações simuladas para coleta das métricas --------------------------------------
     def get_device_cpu_usage(self, device_id):
-        return 70  
+        return 70
 
     def get_device_ram_usage(self, device_id):
-        return 89  
+        return 89
 
     def get_interface_packet_rate(self, device_id, interface):
-        return 1850  
+        return 1850
 
     def get_link_packet_loss(self, device_id):
-        return 3  
+        return 250
 
     def get_link_jitter(self, device_id):
-        return 90  
-        
+        return 920
+    
+    def get_link_latency(self, device_id):
+        return 123
 
-        
-
+    def get_bandwidth(self, device_id):
+        return 29
