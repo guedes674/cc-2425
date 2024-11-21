@@ -6,78 +6,100 @@ from Tarefa import Tarefa
 class NMS_Server:
     def __init__(self, config_path):
         self.config_path = config_path
-        self.tarefas = []
+        self.agents = {}  # Dicionário onde cada chave é o device_id e o valor é o endereço IP/porta do agente
+        self.tasks = self.load_tasks_from_json()
+
 
     # Lê todos os arquivos JSON na pasta de configurações
     def load_tasks_from_json(self):
         json_files = glob.glob(os.path.join(self.config_path, '*.json'))
+        tarefas = []
         for json_file in json_files:
             print(f"Lendo configuração de: {json_file}")
-            tarefa = Tarefa(config_path=json_file)
-            self.tarefas.append(tarefa)
+            tarefa = Tarefa(config_path=json_file)  # A instância de Tarefa já chama o load_file
+            tarefas.append(tarefa)
+        return tarefas
 
 
     # Distribui as tarefas para os NMS_Agents via UDP
     def distribute_tasks(self):
-        if not self.tarefas:
+        if not self.tasks:
             print("Nenhuma tarefa carregada para distribuição.")
             return
-        
-        for tarefa in self.tarefas:
-            for task in tarefa.tasks:  # Acessa a lista de tarefas dentro da instância Tarefa
-                serialized_task = json.dumps(task).encode('utf-8') 
-                for device in task.get("devices", []):
-                    device_ip = device.get('ip')  # Assegure-se de ter o IP correto
-                    if device_ip:
-                        self.UDP.send_message(serialized_task, device_ip, 8080)  # Envia para o IP do dispositivo
-                        print(f"Tarefa enviada para o dispositivo {device['device_id']} no endereço {device_ip}.")
+
+        for tarefa in self.tasks:
+            task_id = tarefa.tasks[0]['task_id']
+
+            for device in tarefa.tasks[0]['devices']:
+                device_id = device['device_id']
+                
+                if device_id in self.agents:
+                    agent_ip, agent_port = self.agents[device_id]
+
+                    # Dados específicos do dispositivo
+                    device_specific_data = {
+                        "task_id": task_id,
+                        "device_id": device_id,
+                        "device_metrics": device.get("device_metrics"),
+                        "link_metrics": device.get("link_metrics"),
+                        "alertflow_conditions": device.get("alertflow_conditions")
+                    }
+                    
+                    serialized_task = json.dumps(device_specific_data, separators=(',', ':')).encode('utf-8')  
+
+                    print(f"[IP]: {agent_ip}, [PORT]: {agent_port}")
+                    print(f"[TASK]: {serialized_task}")
+
+                    # Criar e enviar a mensagem de tarefa para o dispositivo
+                    task_message = UDP(2, serialized_task, identificador=device_id, sequencia=1)
+                    if task_message.send_task(serialized_task, agent_ip, agent_port):
+                        print(f"Tarefa {task_id} enviada para o dispositivo {device_id} no endereço {agent_ip}:{agent_port} com sucesso.")
                     else:
-                        print(f"IP não encontrado para o dispositivo {device['device_id']}.")
+                        print(f"Falha ao enviar a tarefa {task_id} para o dispositivo {device_id}. Nenhum ACK recebido após várias tentativas.")
+            
+                else:
+                    print(f"Agente para o dispositivo {device_id} não encontrado. Tarefa {task_id} não enviada.")
 
-    # Função de teste para verificar se as tarefas foram carregadas
-    def print_loaded_tasks(self):
-        if not self.tarefas:
-            print("Nenhuma tarefa foi carregada.")
-        else:
-            for idx, tarefa in enumerate(self.tarefas, start=1):
-                print(f"\nTarefa {idx}:")
-                for task in tarefa.tasks:
-                    print(json.dumps(task, indent=4))
-
-    def start_server(self):
+    def initialize_tasks(self):
         self.load_tasks_from_json()
-        # self.print_loaded_tasks()
         self.distribute_tasks()
         
         # Inicia o monitoramento de todas as tarefas
-        for tarefa in self.tarefas:
-            tarefa.start_monitoring()
+        for task in self.tasks:
+            task.start_monitoring()
         print("Monitoramento iniciado para todas as tarefas.")
 
     def start_udp_server(self):
         # Configura o servidor UDP para comunicação com os NMS_Agents
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as server_socket:
             LOCAL_ADR = "10.0.5.10"
-            server_socket.bind((LOCAL_ADR, 8080))
-
+            server_socket.bind((LOCAL_ADR, 5000))
+        
             print("Servidor UDP esperando por conexões...")
 
             while True:
-                msg, client_address = server_socket.recvfrom(1024)
-                if not msg:
-                    break
-
-                print(f"Mensagem recebida de {client_address}")
-
-                # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
                 try:
-                    sequencia, identificador, dados = UDP.desserialize_udp(msg)
-                    print(f"Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados.decode('utf-8')}")
+                    msg, client_address = server_socket.recvfrom(1024)
+                    if not msg:
+                        print("Mensagem vazia recebida. Continuando...")
+                        continue  # Ignora pacotes vazios e continua esperando
 
-                    # Envia um ACK de volta para o cliente
-                    ack_message = struct.pack('!I H', sequencia, identificador)
-                    server_socket.sendto(ack_message, client_address)
-                    print("ACK enviado para o cliente.")
+                    print(f"Mensagem recebida de {client_address}")
+
+                    # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
+                    sequencia, identificador, dados = UDP.desserialize(msg)
+                    print(f"Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados}")
+
+                    # Criando o ACK como uma instância UDP
+                    ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia)
+                    ack_message.send_ack(client_address[0], client_address[1])
+
+                    # Guardar ip do agente que acabou de se ligar
+                    self.agents[identificador] = (client_address[0], client_address[1])
+                    print("Agentes registrados no servidor:", self.agents)
+
+                    
+                    self.initialize_tasks()
 
                 except struct.error as e:
                     print("Erro ao desserializar a mensagem:", e)
@@ -101,12 +123,7 @@ class NMS_Server:
                         print(f"Alerta recebido do dispositivo {device_id}: {alert_type}, Valor atual: {current_value}")
 
     def run(self):
-        # Inicia ambos os servidores
-        #from threading import Thread
-        #Thread(target=self.start_udp_server).start()
-        #Thread(target=self.start_tcp_server).start()
         self.start_udp_server()
-        self.start_server()
 
 # Executando o servidor NMS
 if __name__ == "__main__":
