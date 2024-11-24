@@ -7,7 +7,7 @@ class Tarefa:
         self.config_path = config_path
         self.tasks = []
         self.load_file()
-        
+
     # Carrega, interpreta e armazena as informações das tarefas e dispositivos
     # a partir do arquivo JSON de configuração
     def load_file(self):

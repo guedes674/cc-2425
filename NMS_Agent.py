@@ -81,18 +81,52 @@ class NMS_Agent:
 
         # Exemplo de operações:
         for device in task['devices']:
-            device_id = device['device_id']
+            device_id = device.get('device_id')
             metrics = device.get('device_metrics')
             link_metrics = device.get('link_metrics')
             alert_conditions = device.get('alertflow_conditions')
-            
-            # Chamar funções para monitoramento de métricas ou alertas
-            self.collect_metrics(device_id, metrics, link_metrics)
-            self.check_alerts(device_id, alert_conditions)
 
+        # Chamar funções para monitoramento de métricas ou alertas
+        self.collect_metrics(device_id, metrics, link_metrics)
+        self.check_alerts(device_id, alert_conditions)
+
+    def collect_metrics(self, device_id, metrics, link_metrics):
+        print(f"[DEBUG - collect_metrics] Coletando métricas para o dispositivo {device_id}")
+
+        if metrics:
+            print(f"[DEBUG - collect_metrics] Métricas do dispositivo: {metrics}")
+            # Processar métricas do dispositivo
+            for metric, value in metrics.items():
+                print(f"[DEBUG - collect_metrics] Métrica: {metric}, Valor: {value}")
+                # Adicione lógica para processar cada métrica
+
+        if link_metrics:
+            print(f"[DEBUG - collect_metrics] Métricas de link: {link_metrics}")
+            # Processar métricas de link
+            for link, link_value in link_metrics.items():
+                print(f"[DEBUG - collect_metrics] Link: {link}, Valor: {link_value}")
+                # Adicione lógica para processar cada métrica de link
+
+        # Adicione lógica para armazenar ou enviar as métricas coletadas
+        print(f"[DEBUG - collect_metrics] Coleta de métricas concluída para o dispositivo {device_id}")
+
+    def check_alerts(self, device_id, alert_conditions):
+        print(f"[DEBUG - check_alerts] Verificando alertas para o dispositivo {device_id}")
+
+        if alert_conditions:
+            print(f"[DEBUG - check_alerts] Condições de alerta: {alert_conditions}")
+            # Processar condições de alerta
+            for alert, condition in alert_conditions.items():
+                print(f"[DEBUG - check_alerts] Alerta: {alert}, Condição: {condition}")
+                # Adicione lógica para verificar cada condição de alerta
+
+        # Adicione lógica para enviar alertas ou notificações
+        print(f"[DEBUG - check_alerts] Verificação de alertas concluída para o dispositivo {device_id}")
 
     # Implementar outras funções para coleta de métricas, enviar alertas, etc., conforme necessário
 
-nms_agent = NMS_Agent(server_endereco="10.0.5.10", server_porta=5000)
-nms_agent.connect_to_server()
-nms_agent.receive_task()
+
+if __name__ == "__main__":
+    nms_agent = NMS_Agent(server_endereco="10.0.5.10", server_porta=5000)
+    nms_agent.connect_to_server()
+    nms_agent.receive_task()

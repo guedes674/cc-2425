@@ -11,7 +11,6 @@ class UDP:
         self.endereco = endereco                 # Endereço do servidor
         self.porta = porta                       # Porta do servidor
         self.sock = sock if sock else socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Reutiliza o socket, se disponível
- 
     # --------------------------- UDP ---------------------------
 
     # Antes de enviar um pacote, devemos serializá-lo (mudar para formato binário)
@@ -60,26 +59,31 @@ class UDP:
         if self.tipo == 99:  # Envio de ACK sem esperar
             self.sock.sendto(mensagem_binaria, (self.endereco, self.porta))
             print("[ACK] Enviado sem esperar confirmação")
-            return True  
+            return True
 
         # Implementação de reenvio para mensagens que necessitam de confirmação
         tentativas = 0
         ack_recebido = False
         while tentativas < max_retries and not ack_recebido:
             self.sock.sendto(mensagem_binaria, (self.endereco, self.porta))
+            print(f"[DEBUG - send_message] Mensagem enviada, aguardando ACK (tentativa {tentativas + 1})")
+            print(self.sock)
             try:
                 ack_mensagem, _ = self.sock.recvfrom(1024)
+                print(f"[DEBUG - send_message] Mensagem ACK recebida: {ack_mensagem}")
                 ack_sequencia, ack_identificador, _ = UDP.desserialize(ack_mensagem)
-                if ack_sequencia == self.sequencia and ack_identificador == self.identificador:
+                print("[DEBUG - send_message] ACK semi-recebido: ", ack_sequencia, ack_identificador)
+                if ack_identificador == self.identificador:
                     ack_recebido = True
                     print("[DEBUG - send_message] ACK válido recebido")
             except socket.timeout:
                 print("[ERRO - send_message] Timeout ao aguardar ACK")
                 tentativas += 1
                 time.sleep(delay * (2 ** tentativas))
-        
+
         if not ack_recebido:
             print("[ERRO - send_message] Falha ao receber ACK após várias tentativas")
+
         return ack_recebido
 
     # --------------------------- Mensagens ---------------------------
