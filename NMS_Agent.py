@@ -9,7 +9,6 @@ class NMS_Agent:
 
         # Criar o socket UDP para comunicação com o servidor
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((self.id, 0))  # Liga o socket ao endereço IP do agente e a uma porta disponível
 
 
     # Obtém o endereço IP local do dispositivo (ID do NMS_Agent)
@@ -27,16 +26,25 @@ class NMS_Agent:
 
     # Usando a função registo do NetTask para registrar o NMS_Agent
     def connect_to_server(self):
-        mensagem_registo = UDP(tipo=1, dados="", identificador=self.id, sequencia=1)
-        mensagem_registo.registo(self.server_endereco, self.server_porta)
+        mensagem_registo = UDP(
+            tipo=1, 
+            dados="", 
+            identificador=self.id, 
+            sequencia=1, 
+            endereco=self.server_endereco, 
+            porta=self.server_porta, 
+            sock=self.sock
+        )
+        mensagem_registo.send_message()
 
     # No método receive_task do agente
     def receive_task(self):
         print("[DEBUG - receive_task] Aguardando tarefas do NMS_Server...")
         while True:
             try:
-                data, addr = self.sock.recvfrom(1024)
-                print(f"[DEBUG - receive_task] Mensagem recebida de {addr}")
+                # Recebe a mensagem e o endereço de onde ela foi enviada
+                data, addr = self.sock.recvfrom(4096)
+                print(f"[DEBUG - receive_task] Mensagem recebida de {addr[0]} na porta {addr[1]}")  # addr[0] -> IP, addr[1] -> Porta
 
                 # Desserializar a mensagem recebida para extrair a sequência, identificador e dados
                 sequencia, identificador, dados = UDP.desserialize(data)
@@ -44,18 +52,23 @@ class NMS_Agent:
 
                 # Verificar se a tarefa é direcionada ao agente correto
                 if identificador == self.id:
-                    task_data = dados.decode('utf-8')
+                    task_data = dados
                     print(f"[DEBUG - receive_task] Tarefa recebida e processada: {task_data}")
 
                     # Enviar um ACK de confirmação ao servidor
-                    ack_message = UDP(tipo=99, dados=b'ACK', identificador=identificador, sequencia=sequencia)
-                    self.sock.sendto(ack_message.serialize(), addr)
-                    print(f"[DEBUG - receive_task] ACK enviado para o NMS_Server no endereço {addr}")
+                    ack_message = UDP(tipo=99, dados='', identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
+                                      porta=self.server_porta, sock=self.sock)
+                    print(f"[DEBUG - send_ack] Enviando ACK para {self.server_endereco}:{self.server_porta}")
+                    ack_message.send_ack()
 
                     # Processar a tarefa recebida
                     self.process_task(task_data)
                 else:
                     print(f"[DEBUG - receive_task] Tarefa não direcionada para este agente. Ignorada.")
+
+            except socket.timeout:
+                print("[DEBUG - receive_task] Tempo esgotado. Nenhuma mensagem recebida.")
+                continue  # Volta para aguardar a próxima mensagem
 
             except Exception as e:
                 print(f"[ERRO - receive_task] Falha ao receber mensagem: {e}")

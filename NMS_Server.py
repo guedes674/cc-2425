@@ -29,12 +29,14 @@ class NMS_Server:
 
         for tarefa in self.tasks:
             task_id = tarefa.tasks[0]['task_id']
+            print(f"[DEBUG - Servidor] Iniciando distribuição da tarefa {task_id}")
 
             for device in tarefa.tasks[0]['devices']:
                 device_id = device['device_id']
                 
                 if device_id in self.agents:
                     agent_ip, agent_port = self.agents[device_id]
+                    print(f"[DEBUG - Servidor] Preparando envio para o agente {device_id} no IP {agent_ip} e porta {agent_port}")
 
                     # Dados específicos do dispositivo
                     device_specific_data = {
@@ -51,8 +53,8 @@ class NMS_Server:
                     print(f"[TASK]: {serialized_task}")
 
                     # Criar e enviar a mensagem de tarefa para o dispositivo
-                    task_message = UDP(2, serialized_task, identificador=device_id, sequencia=1)
-                    if task_message.send_task(serialized_task, agent_ip, agent_port):
+                    task_message = UDP(2, serialized_task, identificador=device_id, sequencia=1, endereco=agent_ip, porta=agent_port)
+                    if task_message.send_task():
                         print(f"Tarefa {task_id} enviada para o dispositivo {device_id} no endereço {agent_ip}:{agent_port} com sucesso.")
                     else:
                         print(f"Falha ao enviar a tarefa {task_id} para o dispositivo {device_id}. Nenhum ACK recebido após várias tentativas.")
@@ -82,7 +84,7 @@ class NMS_Server:
                     msg, client_address = server_socket.recvfrom(1024)
                     if not msg:
                         print("Mensagem vazia recebida. Continuando...")
-                        continue  # Ignora pacotes vazios e continua esperando
+                        continue
 
                     print(f"Mensagem recebida de {client_address}")
 
@@ -91,8 +93,10 @@ class NMS_Server:
                     print(f"Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados}")
 
                     # Criando o ACK como uma instância UDP
-                    ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia)
-                    ack_message.send_ack(client_address[0], client_address[1])
+                    ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=client_address[0], 
+                                      porta=client_address[1], sock=server_socket)
+                    ack_message.send_ack()
+
 
                     # Guardar ip do agente que acabou de se ligar
                     self.agents[identificador] = (client_address[0], client_address[1])
