@@ -6,7 +6,7 @@ class UDP:
     def __init__(self, tipo, dados, identificador=None, sequencia=None, endereco=None, porta=None, socket=None):
         self.tipo = tipo                         # Tipo de mensagem (por exemplo, 'register', 'colect', 'alert')
         self.dados = dados.encode('utf-8') if isinstance(dados, str) else dados      # Conteúdo da mensagem
-        self.identificador = str(identificador)  # ID do NMS_Agent
+        self.identificador = identificador  # ID do NMS_Agent
         self.sequencia = sequencia               # Número de sequência para NetTask (UDP)
         self.endereco = endereco                 # Endereço do servidor
         self.porta = porta                       # Porta do servidor
