@@ -25,7 +25,7 @@ class Tarefa:
             device_id = device_data['device_id']
             device_metrics = device_data['device_metrics']
             link_metrics = device_data['link_metrics']
-            alertflow_conditions = device_data['alertflow_conditions']
+            alertflow_conditions = device_data['link_metrics'].get('alertflow_conditions', {})
 
             device = {
                 'device_id': device_id,

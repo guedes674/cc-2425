@@ -27,38 +27,32 @@ class NMS_Server:
             print("Nenhuma tarefa carregada para distribuição.")
             return
 
-        if identificador:
-            for tarefa in self.tasks:
-                task_id = tarefa.tasks[0]['task_id']
-                frequency = tarefa.tasks[0]['frequency']
-                devices = tarefa.tasks[0]['devices']
-                print(f"[DEBUG - Servidor] Iniciando distribuição da tarefa {task_id}")
-                
-                for device in tarefa.tasks[0]['devices']:
-                
-                    if identificador in self.agents:
-                        agent_ip, agent_port = self.agents[identificador]
-                        print(f"[DEBUG - Servidor] Preparando envio para o agente {identificador} no IP {agent_ip} e porta {agent_port}")
+        for tarefa in self.tasks:
+            task_id = tarefa.tasks[0]['task_id']
+            frequency = tarefa.tasks[0]['frequency']
+            devices = tarefa.tasks[0]['devices']
+            print(f"[DEBUG - Servidor] Iniciando distribuição da tarefa {task_id}")
+            
+            for device in devices:
+                agent_ip, agent_port = self.agents[device.get('device_id')]
+                print(f"[DEBUG - Servidor] Preparando envio para o agente {identificador} no IP {agent_ip} e porta {agent_port}")
 
-                        # Dados específicos do dispositivo
-                        device_specific_data = {
-                            "task_id": task_id,
-                            "frequency": frequency,
-                            "devices": devices,
-                        }
-
+                # Dados específicos do dispositivo
+                device_specific_data = device
+                 
                 serialized_task = json.dumps(device_specific_data, separators=(',', ':')).encode('utf-8')
                 print(f"[IP]: {agent_ip}, [PORT]: {agent_port}")
                 # Criar e enviar a mensagem de tarefa para o dispositivo
                 task_message = UDP(2, serialized_task, identificador=identificador, sequencia=1, endereco=agent_ip, porta=agent_port, socket = self.socket)
-                if task_message.send_task():
-                    print(f"Tarefa {device_specific_data['task_id']} enviada para o dispositivo {identificador} no endereço {agent_ip}:{agent_port} com sucesso.")
-                else:
-                    print(f"Falha ao enviar a tarefa {device_specific_data['task_id']} para o dispositivo {identificador}. Nenhum ACK recebido após várias tentativas.")
-                return
+            if task_message.send_task():
+                print(f"Tarefa {device_specific_data['task_id']} enviada para o dispositivo {identificador} no endereço {agent_ip}:{agent_port} com sucesso.")
+            else:
+                print(f"Falha ao enviar a tarefa {device_specific_data['task_id']} para o dispositivo {identificador}. Nenhum ACK recebido após várias tentativas.")
+            return
  
     def initialize_tasks(self,identificador):
         self.load_tasks_from_json()
+        input("Pressione Enter para distribuir as tarefas para os agentes...")
         self.distribute_tasks(identificador)
         
         # Inicia o monitoramento de todas as tarefas
@@ -124,6 +118,6 @@ class NMS_Server:
 
 # Executando o servidor NMS
 if __name__ == "__main__":
-    config_path = "./Tarefas"
+    config_path = "./dataset"
     server = NMS_Server(config_path)
     server.run()

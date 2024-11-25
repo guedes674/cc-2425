@@ -6,16 +6,12 @@ class NMS_Agent:
         self.id = self.get_device_address()    # Obter o endereço IP do prórprio nodo
         self.server_endereco = server_endereco
         self.server_porta = server_porta
-
-        # Criar o socket UDP para comunicação com o servidor
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
 
     # Obtém o endereço IP local do dispositivo (ID do NMS_Agent)
     def get_device_address(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            # Não é necessário que o endereço 8.8.8.8 esteja acessível, é apenas para obter o IP
             s.connect(("8.8.8.8", 80))
             ip_address = s.getsockname()[0]
         except Exception:
@@ -77,12 +73,11 @@ class NMS_Agent:
         # Converter JSON para dicionário
 
         # Exemplo de operações:
-        for device in task['devices']:
-            device_id = device.get('device_id')
-            metrics = device.get('device_metrics')
-            link_metrics = device.get('link_metrics')
-            alert_conditions = device.get('alertflow_conditions')
-            self.perform_network_tests(device_id, link_metrics)
+        device_id = task.get('device_id')
+        metrics = task.get('device_metrics')
+        link_metrics = task.get('link_metrics')
+        alert_conditions = task.get('link_metrics').get('alertflow_conditions')
+        self.perform_network_tests(device_id, link_metrics)
 
         # Chamar funções para monitoramento de métricas ou alertas
         
@@ -143,7 +138,7 @@ class NMS_Agent:
                 mode = link_metrics.get(metric).get('mode')
                 transport = link_metrics.get(metric).get('transport')
                 if device_id:
-                    response = os.system(f"iperf {'-c' if mode == 'cliente' else "-s"} {device_id} {'-u' if transport == 'udp' else ''} -b -{duration*100}M")
+                    response = os.system(f"iperf {'-c' if mode == 'cliente' else '-s'} {device_id} {'-u' if transport == 'udp' else ''} -b {duration*100}M")
                     print(f"[DEBUG - perform_network_tests] Iperf response for {device_id}: {response}")
 
 if __name__ == "__main__":
