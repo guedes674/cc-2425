@@ -108,7 +108,5 @@ class UDP:
     # Mensagem de tipo 2 - Envio de Tarefa
     def send_task(self):
         print(f'[NetTask] Envio de Tarefa para {self.endereco}:{self.porta}')
-        task_message = UDP(2, self.dados, self.identificador, self.sequencia, self.endereco, self.porta)
+        task_message = UDP(2, self.dados, self.identificador, self.sequencia, self.endereco, self.porta,self.sock)
         task_message.send_message()
-
-

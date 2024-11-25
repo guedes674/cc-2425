@@ -1,1 +1,0 @@
-# Penso que aqui faria sentido incluirmos a lógica da nossa GUI

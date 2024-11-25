@@ -33,7 +33,7 @@ class NMS_Server:
                 frequency = tarefa.tasks[0]['frequency']
                 devices = tarefa.tasks[0]['devices']
                 print(f"[DEBUG - Servidor] Iniciando distribuição da tarefa {task_id}")
-
+                
                 for device in tarefa.tasks[0]['devices']:
                 
                     if identificador in self.agents:
@@ -104,10 +104,9 @@ class NMS_Server:
 
     def start_udp_server(self):
         # Configura o servidor UDP para comunicação com os NMS_Agents
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as server_socket:
+        with self.socket as server_socket:
             LOCAL_ADR = "10.0.5.10"
             server_socket.bind((LOCAL_ADR, 5000))
-        
             print("Servidor UDP esperando por conexões...")
 
             while True:
@@ -122,7 +121,7 @@ class NMS_Server:
                     # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
                     sequencia, identificador, dados = UDP.desserialize(msg)
                     print(f"Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados}")
-
+                    
                     # Criando o ACK como uma instância UDP
                     ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=client_address[0], 
                                       porta=client_address[1], sock=server_socket)
@@ -134,7 +133,7 @@ class NMS_Server:
 
                     
                     self.initialize_tasks(identificador)
-
+                    
                 except struct.error as e:
                     print("Erro ao desserializar a mensagem:", e)
 
