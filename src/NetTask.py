@@ -3,14 +3,14 @@ import struct
 import time
 
 class UDP:
-    def __init__(self, tipo, dados, identificador=None, sequencia=None, endereco=None, porta=None, sock=None):
+    def __init__(self, tipo, dados, identificador=None, sequencia=None, endereco=None, porta=None, socket=None):
         self.tipo = tipo                         # Tipo de mensagem (por exemplo, 'register', 'colect', 'alert')
         self.dados = dados.encode('utf-8') if isinstance(dados, str) else dados      # Conteúdo da mensagem
         self.identificador = str(identificador)  # ID do NMS_Agent
         self.sequencia = sequencia               # Número de sequência para NetTask (UDP)
         self.endereco = endereco                 # Endereço do servidor
         self.porta = porta                       # Porta do servidor
-        self.sock = sock if sock else socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Reutiliza o socket, se disponível
+        self.socket = socket if socket else socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Reutiliza o socket, se disponível
     # --------------------------- UDP ---------------------------
 
     # Antes de enviar um pacote, devemos serializá-lo (mudar para formato binário)
@@ -50,14 +50,14 @@ class UDP:
             return False
 
         # Usa o socket existente, configurando o timeout uma vez
-        if not self.sock.gettimeout():
-            self.sock.settimeout(timeout)
+        if not self.socket.gettimeout():
+            self.socket.settimeout(timeout)
         
         mensagem_binaria = self.serialize()
         print(f"[DEBUG - send_message] Enviando mensagem para {self.endereco}:{self.porta} - Tipo: {self.tipo}, Sequência: {self.sequencia}")
 
         if self.tipo == 99:  # Envio de ACK sem esperar
-            self.sock.sendto(mensagem_binaria, (self.endereco, self.porta))
+            self.socket.sendto(mensagem_binaria, (self.endereco, self.porta))
             print("[ACK] Enviado sem esperar confirmação")
             return True
 
@@ -65,15 +65,13 @@ class UDP:
         tentativas = 0
         ack_recebido = False
         while tentativas < max_retries and not ack_recebido:
-            self.sock.sendto(mensagem_binaria, (self.endereco, self.porta))
+            self.socket.sendto(mensagem_binaria, (self.endereco, self.porta))
             print(f"[DEBUG - send_message] Mensagem enviada, aguardando ACK (tentativa {tentativas + 1})")
-            print(self.sock)
+            print(self.socket)
             try:
-                ack_mensagem, _ = self.sock.recvfrom(1024)
-                print(f"[DEBUG - send_message] Mensagem ACK recebida: {ack_mensagem}")
+                ack_mensagem, _ = self.socket.recvfrom(1024)
                 ack_sequencia, ack_identificador, _ = UDP.desserialize(ack_mensagem)
-                print("[DEBUG - send_message] ACK semi-recebido: ", ack_sequencia, ack_identificador)
-                if ack_identificador == self.identificador:
+                if ack_sequencia == self.sequencia and ack_identificador == self.identificador:
                     ack_recebido = True
                     print("[DEBUG - send_message] ACK válido recebido")
             except socket.timeout:
@@ -108,5 +106,5 @@ class UDP:
     # Mensagem de tipo 2 - Envio de Tarefa
     def send_task(self):
         print(f'[NetTask] Envio de Tarefa para {self.endereco}:{self.porta}')
-        task_message = UDP(2, self.dados, self.identificador, self.sequencia, self.endereco, self.porta,self.sock)
+        task_message = UDP(2, self.dados, self.identificador, self.sequencia, self.endereco, self.porta,self.socket)
         task_message.send_message()
