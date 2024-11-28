@@ -137,8 +137,9 @@ class NMS_Agent:
                 duration = link_metrics.get(metric).get('duration')
                 mode = link_metrics.get(metric).get('mode')
                 transport = link_metrics.get(metric).get('transport')
+                server = link_metrics.get(metric).get('server_address')
                 if device_id:
-                    response = os.system(f"iperf {'-c' if mode == 'cliente' else '-s'} {device_id} {'-u' if transport == 'udp' else ''} -b {duration*100}M")
+                    response = os.system(f"iperf {'-c' if mode == 'client' else '-s'} {server if mode =='client' else ''} {'-u' if transport == 'udp' else ''} -b {duration*100}M")
                     print(f"[DEBUG - perform_network_tests] Iperf response for {device_id}: {response}")
 
 if __name__ == "__main__":

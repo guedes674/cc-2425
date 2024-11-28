@@ -1,56 +1,56 @@
 {
-    "Task": {
-      "task_id": "task-02",
-      "frequency": 10,
-      "devices": [
+  "Task": {
+    "task_id": "task-01",
+    "frequency": 20,
+    "devices": [
+      {
+        "device_id": "10.0.7.10",
+        "device_metrics": {
+          "cpu_usage": true,
+          "ram_usage": true,
+          "interface_stats": ["eth0", "eth1"]
+        },
+        "link_metrics": {
+          "bandwidth": {
+            "tool": "iperf",
+            "mode": "client",
+            "server_address": "10.0.4.10",
+            "duration": 10,
+            "transport": "udp",
+            "frequency": 30
+          },
+          "alertflow_conditions": {
+            "cpu_usage": 80,
+            "ram_usage": 90,
+            "interface_stats": 2000,
+            "packet_loss": 5,
+            "jitter": 100
+            }
+        }
+        },
         {
-          "device_id": "r3",
+          "device_id": "10.0.4.10",
           "device_metrics": {
             "cpu_usage": true,
             "ram_usage": true,
-            "interface_stats": ["eth0"]
+            "interface_stats": ["eth0", "eth1"]
           },
           "link_metrics": {
             "bandwidth": {
               "tool": "iperf",
-              "mode": "client",
-              "server_address": "10.0.0.1",
-              "duration": 20,
-              "transport": "tcp",
-              "frequency": 15
-            },
-            "jitter": {
-              "tool": "iperf",
-              "mode": "client",
-              "server_address": "10.0.0.1",
-              "duration": 20,
-              "transport": "tcp",
-              "frequency": 15
-            },
-            "packet_loss": {
-              "tool": "iperf",
-              "mode": "client",
-              "server_address": "10.0.0.1",
-              "duration": 20,
-              "transport": "tcp",
-              "frequency": 15
-            },
-            "latency": {
-              "tool": "ping",
-              "destination": "10.0.0.1",
-              "count": 3,
+              "mode": "server",
+              "duration": 10,
+              "transport": "udp",
               "frequency": 30
-            }
-          },
-          "alertflow_conditions": {
-            "cpu_usage": 75,
-            "ram_usage": 85,
-            "interface_stats": 1500,
-            "packet_loss": 3,
-            "jitter": 80
+            },
+            "alertflow_conditions": {
+              "cpu_usage": 80,
+              "ram_usage": 90,
+              "interface_stats": 2000,
+              "packet_loss": 5,
+              "jitter": 100
+              }
           }
-        }
-      ]
+        }]
+      }
     }
-  }
-  

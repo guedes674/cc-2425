@@ -38,8 +38,7 @@
             "link_metrics": {
               "bandwidth": {
                 "tool": "iperf",
-                "mode": "client",
-                "server_address": "10.0.4.10",
+                "mode": "server",
                 "duration": 10,
                 "transport": "udp",
                 "frequency": 30
