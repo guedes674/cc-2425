@@ -57,7 +57,7 @@ class NMS_Server:
 
                 # Dados específicos do dispositivo
                 device_specific_data = device
-                 
+        
                 serialized_task = json.dumps(device_specific_data, separators=(',', ':')).encode('utf-8')
                 print(f"[IP]: {agent_ip}, [PORT]: {agent_port}")
                 # Criar e enviar a mensagem de tarefa para o dispositivo
@@ -67,7 +67,7 @@ class NMS_Server:
                 else:
                     print(f"Falha ao enviar a tarefa {task_id} para o dispositivo {device_id}. Nenhum ACK recebido após várias tentativas.")
                 return
- 
+
     def initialize_tasks(self,devices_task_sent=[]):
         devices_task_sent = devices_task_sent
         self.load_tasks_from_json()
@@ -156,7 +156,6 @@ class NMS_Server:
 # Executando o servidor NMS
 if __name__ == "__main__":
 
-    
     config_path = "./dataset"
     server = NMS_Server(config_path)
     server.run()

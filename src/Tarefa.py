@@ -7,6 +7,7 @@ class Tarefa:
         self.config_path = config_path
         self.tasks = []
         self.load_file()
+        self.dict = {}
 
     # Carrega, interpreta e armazena as informações das tarefas e dispositivos
     # a partir do arquivo JSON de configuração
@@ -42,6 +43,20 @@ class Tarefa:
         }
         self.tasks.append(task)
 
+    def create_tasks_dict(self):
+        for task in self.tasks:
+            devices = task['devices']
+            for device in devices:
+                device_id = device['device_id']
+                t = tuple(task['task_id'], device)
+                device_list = self.dict[device_id]
+                if device_list:
+                    for x in device_list:
+                        if not x[0]<t[0]:
+                            self.dict[device_id].append(t)
+                else:
+                    tuplelist = [t]
+                    self.dict.put(device_id, tuplelist)
 
     # Para cada tarefa, cria um processo de monitorização com a frequência definida
     def start_monitoring(self):

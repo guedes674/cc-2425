@@ -1,6 +1,7 @@
 import socket, json
 from NetTask import UDP
 import os
+import subprocess
 class NMS_Agent:
     def __init__(self, server_endereco, server_porta):
         self.id = self.get_device_address()    # Obter o endereço IP do prórprio nodo
@@ -129,7 +130,8 @@ class NMS_Agent:
                 if device_id:
                     duration = link_metrics.get(metric).get('duration')
                     frequency = link_metrics.get(metric).get('frequency')   
-                    response = os.system(f"ping -c {frequency} {device_id}")
+                    destination = link_metrics.get(metric).get('destination')
+                    response = os.system(f"ping -c {frequency} {destination}")
                     print(f"[DEBUG - perform_network_tests] Ping response for {device_id}: {response}")
 
             # Example of using iperf
@@ -138,9 +140,28 @@ class NMS_Agent:
                 mode = link_metrics.get(metric).get('mode')
                 transport = link_metrics.get(metric).get('transport')
                 server = link_metrics.get(metric).get('server_address')
-                if device_id:
-                    response = os.system(f"iperf {'-c' if mode == 'client' else '-s'} {server if mode =='client' else ''} {'-u' if transport == 'udp' else ''} -b {duration*100}M")
-                    print(f"[DEBUG - perform_network_tests] Iperf response for {device_id}: {response}")
+                comand = ["iperf"]
+                if mode == "client":
+                    comand.append("-c")
+                    comand.append(server)
+                    if transport == "udp":
+                        comand.append("-u")
+                    comand.append("-b")
+                    comand.append(f"{duration*100}M")
+                else:
+                    comand.append("-s")
+                    if transport == "udp":
+                        comand.append("-u")
+                    comand.append("-1")
+
+                #response = os.system(f"iperf {'-c' if mode == 'client' else '-s'} {server if mode =='client' else ''} {'-u' if transport == 'udp' else ''} -b {duration*100}M")
+                try :
+                    response = subprocess.run(comand, stdout=subprocess.PIPE,text=True)
+                    response.wait(timeout = 20)
+                except subprocess.TimeoutExpired:
+                    print(f"[DEBUG - perform_network_tests] Iperf test timed out.")
+                    response.terminate()
+                print(f"[DEBUG - perform_network_tests] Iperf response for {device_id}: {response.stdout}")
 
 if __name__ == "__main__":
     nms_agent = NMS_Agent(server_endereco="10.0.5.10", server_porta=5000)
