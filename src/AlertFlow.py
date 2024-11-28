@@ -10,20 +10,29 @@ import socket
 #   - 6) Mensagem de Erro                -> Por fazer
 
 class TCP:
-    def __init__(self, tipo, identificador, dados):
+    def __init__(self, tipo, dados, identificador, endereco, porta):
         self.tipo = tipo                    
-        self.identificador = identificador  # ID do NMS_Agent
         self.dados = dados.encode('utf-8')  # Conteúdo da mensagem codificado para TCP
         self.tamanho_dados = len(self.dados)
+        self.identificador = identificador  # ID do NMS_Agent
+        self.endereco = endereco  # Endereço do servidor
+        self.porta = porta        # Porta do servidor
+        self.socket = None
 
-    # Formata a mensagem como um dicionário para visualização, se necessário
-    def AlertFlow_Format(self):
-        return {
-            'tipo': self.tipo,
-            'identificador': self.identificador,
-            'tamanho_dados': self.tamanho_dados,
-            'dados': self.dados.decode('utf-8'),
-        }
+    def connect(self):
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.connect((self.endereco, self.porta))
+            print(f"Conexão estabelecida com {self.endereco}:{self.porta}")
+        except Exception as e:
+            print(f"Erro ao conectar ao servidor: {e}")
+            self.socket = None
+    
+    def disconnect(self):
+        if self.socket:
+            self.socket.close()
+            print("Conexão TCP encerrada.")
+            self.socket = None
 
     # Serialização para TCP
     def serialize_tcp(self):
@@ -38,17 +47,31 @@ class TCP:
         return tipo, identificador, dados
 
     # Envio de mensagem TCP
-    def send_message(self, endereco, porta):
+    def send_message_TCP(self):
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect((endereco, porta))
+            # Conectar se o socket não estiver conectado
+            if self.socket is None:
+                self.connect()
+            
+            # Verifica se a conexão foi estabelecida
+            if self.socket:
                 mensagem_binaria = self.serialize_tcp()
-                sock.sendall(mensagem_binaria)
-                print("Alerta enviado com sucesso")
+                self.socket.sendall(mensagem_binaria)
+                print("Mensagem enviada com sucesso.")
+            else:
+                print("Não foi possível enviar a mensagem: Conexão não estabelecida.")
         except Exception as e:
-            print(f"Erro ao enviar alerta TCP: {e}")
+            print(f"Erro ao enviar mensagem: {e}")
+            self.disconnect()
 
     # --------------------------------- Mensagens ----------------------------------------------------
+
+    # Criação da mensagem de registro (tipo 0)
+    def registo(self):
+        print(f"[AlertFlow] Registo do NMS_Agent com ID {self.identificador} no NMS_Server...")
+        mensagem_registro = TCP(0, "", self.identificador, self.endereco, self.porta)
+        mensagem_registro.send_message()
+
 
     # Mensagem de alerta (tipo 1)
     @classmethod

@@ -1,7 +1,7 @@
-import socket, json
+import socket, json, os, subprocess
 from NetTask import UDP
-import os
-import subprocess
+from AlertFlow import TCP
+
 class NMS_Agent:
     def __init__(self, server_endereco, server_porta):
         self.id = self.get_device_address()    # Obter o endereço IP do prórprio nodo
@@ -21,8 +21,8 @@ class NMS_Agent:
             s.close()
         return ip_address
 
-    # Usando a função registo do NetTask para registrar o NMS_Agent
-    def connect_to_server(self):
+    # Usando a função registo do NetTask para registar o NMS_Agent
+    def connect_to_UDP_server(self):
         mensagem_registo = UDP(
             tipo=1, 
             dados="", 
@@ -33,6 +33,17 @@ class NMS_Agent:
             socket=self.socket
         )
         mensagem_registo.send_message()
+
+    # Usando a função registo do AlertFlow para registar o NMS_Agent
+    def connect_to_TCP_server(self):
+        mensagem_registo = TCP(
+            tipo=1,
+            dados="",
+            identificador=self.id,
+            endereco=self.server_endereco,
+            porta=self.server_porta,
+        )
+        mensagem_registo.send_message_TCP()
 
     # No método receive_task do agente
     def receive_task(self):
@@ -165,5 +176,6 @@ class NMS_Agent:
 
 if __name__ == "__main__":
     nms_agent = NMS_Agent(server_endereco="10.0.5.10", server_porta=5000)
-    nms_agent.connect_to_server()
+    nms_agent.connect_to_TCP_server()
+    nms_agent.connect_to_UDP_server()
     nms_agent.receive_task()

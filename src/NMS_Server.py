@@ -1,4 +1,4 @@
-import socket, os, glob, json, struct
+import socket, os, glob, json, struct, threading
 from AlertFlow import TCP
 from NetTask import UDP
 from Tarefa import Tarefa
@@ -111,23 +111,48 @@ class NMS_Server:
             except struct.error as e:
                 print("Erro ao desserializar a mensagem:", e)
 
+    # Função para tratar a conexão de um cliente em uma thread separada.
+    def handle_client_connection(conn, addr):
+        debug_print(f"Conexão iniciada com {addr}")
+        try:
+            while True:
+                msg = conn.recv(1024)
+                if not msg:
+                    break  # Conexão encerrada pelo cliente
+                alert_type, device_id, current_value = TCP.deserialize_tcp(msg)
+                debug_print(f"Alerta recebido do dispositivo {device_id}: {alert_type}, Valor atual: {current_value}")
+        except Exception as e:
+            debug_print(f"Erro na conexão com {addr}: {e}")
+        finally:
+            debug_print(f"Conexão encerrada com {addr}")
+            conn.close()
+
+    # Configura o servidor TCP para receber alertas críticos dos NMS_Agents.
+    # Lida com múltiplas conexões utilizando threads.
     def start_tcp_server(self):
-        # Configura o servidor TCP para receber alertas críticos dos NMS_Agents
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
             LOCAL_ADR = "10.0.5.10"
-            server_socket.bind((LOCAL_ADR, 9000))
+            PORT = 9000
+            server_socket.bind((LOCAL_ADR, PORT))
             server_socket.listen(5)
 
             debug_print("Servidor TCP esperando por conexões de alertas...")
 
             while True:
-                conn, addr = server_socket.accept()
-                with conn:
-                    debug_print(f"Conectado por {addr}")
-                    msg = conn.recv(1024)
-                    if msg:
-                        alert_type, device_id, current_value = TCP.deserialize_tcp(msg)
-                        debug_print(f"Alerta recebido do dispositivo {device_id}: {alert_type}, Valor atual: {current_value}")
+                try:
+                    # Aceita conexões de clientes
+                    conn, addr = server_socket.accept()
+
+                    # Cria uma thread para tratar a conexão do cliente
+                    client_thread = threading.Thread(target=handle_client_connection, args=(conn, addr), daemon=True)
+                    client_thread.start()
+
+                    debug_print(f"Thread criada para conexão com {addr}")
+                except KeyboardInterrupt:
+                    debug_print("Servidor interrompido pelo usuário.")
+                    break
+                except Exception as e:
+                    debug_print(f"Erro no servidor: {e}")
 
     def run(self):
         global debug
@@ -135,18 +160,21 @@ class NMS_Server:
         self.socket.bind((LOCAL_ADR, 5000))
         while True:
             print("Iniciando servidor NMS...")
-            print("1 - Iniciar socket UDP")
-            print("2 - Distribuir tarefas")
-            print("3 - Debug mode")
+            print("1 - Iniciar socket TCP")
+            print("2 - Iniciar socket UDP")
+            print("3 - Distribuir tarefas")
+            print("4 - Debug mode")
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
                 break
             elif option == "1":
-                self.start_udp_server()
+                self.start_tcp_server()
             elif option == "2":
-                self.initialize_tasks()
+                self.start_udp_server()
             elif option == "3":
+                self.initialize_tasks()
+            elif option == "4":
                 debug = True
                 print("Debug mode ativado.")
             else:
