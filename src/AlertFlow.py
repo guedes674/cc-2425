@@ -1,38 +1,13 @@
-import struct
-import socket
-
-# Tipos de mensagem:
-#   - 1) Mensagem de Alerta              -> Feito
-#   - 2) Mensagem de Status de Interface -> Por Fazer
-#   - 3) Mensagem de Latência(ping)      -> Por fazer
-#   - 4) Mensagem de Coleta de Métricas(ram,cpu,...)  -> Por fazer
-#   - 5) Mensagem de Confirmação (ACK)   -> Por fazer
-#   - 6) Mensagem de Erro                -> Por fazer
+import struct, socket
 
 class TCP:
-    def __init__(self, tipo, dados, identificador, endereco, porta, socket):
+    def __init__(self, tipo, dados, identificador, endereco, porta):
         self.tipo = tipo                    
         self.dados = dados.encode('utf-8')  # Conteúdo da mensagem codificado para TCP
         self.tamanho_dados = len(self.dados)
         self.identificador = identificador  # ID do NMS_Agent
         self.endereco = endereco            # Endereço do servidor
         self.porta = porta                  # Porta do servidor
-        self.socket = None
-
-    def connect(self):
-        try:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.connect((self.endereco, self.porta))
-            print(f"Conexão estabelecida com {self.endereco}:{self.porta}")
-        except Exception as e:
-            print(f"Erro ao conectar ao servidor: {e}")
-            self.socket = None
-    
-    def disconnect(self):
-        if self.socket:
-            self.socket.close()
-            print("Conexão TCP encerrada.")
-            self.socket = None
 
     # Serialização para TCP
     def serialize_tcp(self):
@@ -68,45 +43,90 @@ class TCP:
 
     # Envio de mensagem TCP
     def send_message(self):
-        try:
-            # Conectar se o socket não estiver conectado
-            if self.socket is None:
-                self.connect()
+    try:
+        # Cria o socket e conecta ao servidor
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect((self.endereco, self.porta))
+            print(f"Conexão estabelecida com {self.endereco}:{self.porta}")
             
-            # Verifica se a conexão foi estabelecida
-            if self.socket:
-                mensagem_binaria = self.serialize_tcp()
-                self.socket.sendall(mensagem_binaria)
-                print("Mensagem enviada com sucesso.")
-            else:
-                print("Não foi possível enviar a mensagem: Conexão não estabelecida.")
-        except Exception as e:
-            print(f"Erro ao enviar mensagem: {e}")
-            self.disconnect()
+            # Serializa a mensagem e a envia
+            mensagem_binaria = self.serialize_tcp()
+            sock.sendall(mensagem_binaria)
+            print("Mensagem enviada com sucesso.")
+    except Exception as e:
+        print(f"Erro ao enviar mensagem: {e}")
+
 
     # --------------------------------- Mensagens ----------------------------------------------------
 
-
     # Mensagem de alerta (tipo 1)
-    @classmethod
-    def trigger_alert(self, device_id, alert_type, current_value):
+    def trigger_alert(self, device_id, alert_type, current_value, server_address, server_port):
         # Envia um alerta via AlertFlow (TCP) quando uma condição é ultrapassada
         alert_data = f"Alert: {alert_type} on {device_id}. Current value: {current_value}"
-        alert_message = TCP(1, device_id, alert_data)
-        alert_message.send_message(device_id,24)
+        alert_message = TCP(
+            tipo=1,
+            dados=alert_data,
+            identificador=device_id,
+            endereco=server_address,
+            porta=server_port
+        )
+        alert_message.send_message()
 
     # Mensagem de status interface (tipo 2)
-    @classmethod
-    def trigger_status_interface(self, device_id):
+    def trigger_status_interface(self, device_id, server_address, server_port):
         status = self.get_device_interface_stats(device_id)
         status_data = f"Status: {status} on {device_id}"
-        status_message = TCP(1, device_id, status_data)
-        status_message.send_message(device_id, 24)
+        status_message = TCP(
+            tipo=2, 
+            dados=status_data, 
+            identificador=device_id,
+            endereco=server_address, 
+            porta=server_port
+        )
+        status_message.send_message()
 
     # Mensagem de latência (ping) (tipo 3)
-    @classmethod 
-    def trigger_latency(self,device_id):
+    def trigger_latency(self, device_id, server_address, server_port):
         latency = self.get_link_band_latency(device_id)
         latency_data = f"Latency: {latency} on {device_id}"
-        latency_message = TCP(1, device_id, latency_data)
-        latency_message.send_message(device_id, 24)
+        latency_message = TCP(
+            tipo=3, 
+            dados=latency_data,
+            identificador=device_id,
+            endereco=server_address,
+            porta=server_port
+            )
+        latency_message.send_message()
+
+    def trigger_metrics_collection(self, device_id, metrics_type, metrics_data, server_address, server_port):
+        metrics_data_str = f"Metrics {metrics_type} on {device_id}: {metrics_data}"
+        metrics_message = TCP(
+            tipo=4,
+            dados=metrics_data_str,
+            identificador=device_id,
+            endereco=server_address,
+            porta=server_port
+        )
+        metrics_message.send_message()
+
+    def trigger_error(self, device_id, error_message, server_address, server_port):
+        error_data = f"Error on {device_id}: {error_message}"
+        error_message = TCP(
+            tipo=,
+            dados=error_data,
+            identificador=device_id,
+            endereco=server_address,
+            porta=server_port
+        )
+        error_message.send_message()
+
+    def trigger_acknowledgment(self, device_id, ack_message, server_address, server_port):
+        ack_data = f"ACK from {device_id}: {ack_message}"
+        ack_message = TCP(
+            tipo=,
+            dados=ack_data,
+            identificador=device_id,
+            endereco=server_address,
+            porta=server_port
+        )
+        ack_message.send_message()

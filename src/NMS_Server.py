@@ -112,62 +112,6 @@ class NMS_Server:
             except struct.error as e:
                 print("Erro ao desserializar a mensagem:", e)
 
-    # Função para tratar a conexão de um cliente em uma thread separada.
-    def handle_client_connection(self, conn, addr):
-        debug_print(f"Conexão iniciada com {addr}")
-        
-        empty_msg_count = 0  # Contador para mensagens vazias consecutivas
-        max_empty_msgs = 10  # Limite antes de logar ou tomar ações adicionais
-
-        try:
-            while self.server_running:  # Mantém o servidor rodando enquanto permitido
-                try:
-                    msg = conn.recv(1024)  # Recebe até 1024 bytes
-                    
-                    if msg == b'':  # Mensagem vazia recebida
-                        empty_msg_count += 1  # Incrementa o contador de mensagens vazias
-                        
-                        # Apenas loga se atingir o limite
-                        if empty_msg_count == max_empty_msgs:
-                            debug_print(f"{addr} enviou {max_empty_msgs} mensagens vazias consecutivas.")
-                            empty_msg_count = 0  # Reseta o contador
-
-                        continue  # Continua aguardando mensagens
-                    
-                    # Reseta o contador caso uma mensagem válida seja recebida
-                    empty_msg_count = 0  
-
-                    # Log da mensagem bruta para depuração
-                    debug_print(f"Mensagem bruta recebida: {msg}")
-                    
-                    # Processa a mensagem recebida
-                    try:
-                        alert_type, device_id, current_value = TCP.deserialize_tcp(msg)
-                        debug_print(f"Alerta recebido do dispositivo {device_id}: {alert_type}, Valor atual: {current_value}")
-                    except Exception as e:
-                        debug_print(f"Erro ao desserializar a mensagem: {e}")
-                        # Continua aguardando mensagens mesmo após erro
-                    
-                except socket.timeout:
-                    debug_print(f"Timeout na conexão com {addr}, aguardando novas mensagens...")
-                    continue
-                except socket.error as e:
-                    debug_print(f"Erro de socket com {addr}: {e}")
-                    break  # Encerra a conexão em caso de erro crítico
-                except Exception as e:
-                    debug_print(f"Erro inesperado na conexão com {addr}: {e}")
-                    break  # Encerra em caso de erro inesperado
-        
-        finally:
-            # Fecha a conexão ao sair do loop
-            debug_print(f"Conexão encerrada com {addr}")
-            conn.close()
-
-
-
-
-
-
     # Configura o servidor TCP para receber alertas críticos dos NMS_Agents.
     # Lida com múltiplas conexões utilizando threads.
     def start_tcp_server(self):
