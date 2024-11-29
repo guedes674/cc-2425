@@ -11,6 +11,7 @@ class UDP:
         self.endereco = endereco                 # Endereço do servidor
         self.porta = porta                       # Porta do servidor
         self.socket = socket if socket else socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Reutiliza o socket, se disponível
+    
     # --------------------------- UDP ---------------------------
 
     # Antes de enviar um pacote, devemos serializá-lo (mudar para formato binário)

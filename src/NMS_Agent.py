@@ -174,8 +174,32 @@ class NMS_Agent:
                     response.terminate()
                 print(f"[DEBUG - perform_network_tests] Iperf response for {device_id}: {response.stdout}")
 
+    def run(self):
+        global debug
+        while True:
+            print(f"Bem vindo Agente {self.id}")
+            print("1 - Iniciar AlertFlow")
+            print("2 - Iniciar NetTask")
+            print("3 - Iniciar Tarefas")
+            print("4 - Debug mode")
+            print("0 - Sair")
+            option = input("Digite a opção desejada: ")
+            if option == "0":
+                break
+            elif option == "1":
+                self.connect_to_TCP_server()
+            elif option == "2":
+                self.connect_to_UDP_server()
+            elif option == "3":
+                self.receive_task()
+            elif option == "4":
+                if debug == True:
+                    print("Debug mode ativado.")
+                else:
+                    print("Debug mode desativado.")
+            else:
+                print("Opção inválida. Tente novamente.")
+
 if __name__ == "__main__":
     nms_agent = NMS_Agent(server_endereco="10.0.5.10", server_porta=5000)
-    nms_agent.connect_to_TCP_server()
-    nms_agent.connect_to_UDP_server()
-    nms_agent.receive_task()
+    nms_agent.run()

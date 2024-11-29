@@ -17,8 +17,10 @@ class NMS_Server:
         self.config_path = config_path
         self.agents = {}  # Dicionário onde cada chave é o device_id e o valor é o endereço IP/porta do agente
         self.tasks = self.load_tasks_from_json()
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.tcp_socket = None
         self.upd_started = False
+    
     # Lê todos os arquivos JSON na pasta de configurações
     def load_tasks_from_json(self):
         json_files = glob.glob(os.path.join(self.config_path, '*.json'))
@@ -130,18 +132,18 @@ class NMS_Server:
     # Configura o servidor TCP para receber alertas críticos dos NMS_Agents.
     # Lida com múltiplas conexões utilizando threads.
     def start_tcp_server(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_socket:
             LOCAL_ADR = "10.0.5.10"
             PORT = 9000
-            server_socket.bind((LOCAL_ADR, PORT))
-            server_socket.listen(5)
+            tcp_socket.bind((LOCAL_ADR, PORT))
+            tcp_socket.listen(5)
 
             debug_print("Servidor TCP esperando por conexões de alertas...")
 
             while True:
                 try:
                     # Aceita conexões de clientes
-                    conn, addr = server_socket.accept()
+                    conn, addr = tcp_socket.accept()
 
                     # Cria uma thread para tratar a conexão do cliente
                     client_thread = threading.Thread(target=handle_client_connection, args=(conn, addr), daemon=True)
@@ -156,8 +158,6 @@ class NMS_Server:
 
     def run(self):
         global debug
-        LOCAL_ADR = "10.0.5.10"
-        self.socket.bind((LOCAL_ADR, 5000))
         while True:
             print("Iniciando servidor NMS...")
             print("1 - Iniciar socket TCP")
@@ -183,7 +183,6 @@ class NMS_Server:
 
 # Executando o servidor NMS
 if __name__ == "__main__":
-
     config_path = "./dataset"
     server = NMS_Server(config_path)
     server.run()
