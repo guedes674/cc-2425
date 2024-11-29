@@ -2,12 +2,19 @@ import socket, json, os, subprocess
 from NetTask import UDP
 from AlertFlow import TCP
 
+debug = True
+
+def debug_print(message):
+    if debug:
+        print(message)
+
 class NMS_Agent:
     def __init__(self, server_endereco, server_porta):
         self.id = self.get_device_address()    # Obter o endereço IP do prórprio nodo
         self.server_endereco = server_endereco
         self.server_porta = server_porta
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.tcp_socket = None
 
     # Obtém o endereço IP local do dispositivo (ID do NMS_Agent)
     def get_device_address(self):
@@ -38,12 +45,13 @@ class NMS_Agent:
     def connect_to_TCP_server(self):
         mensagem_registo = TCP(
             tipo=1,
-            dados="",
+            dados="teste",
             identificador=self.id,
             endereco=self.server_endereco,
             porta=self.server_porta,
+            socket=self.tcp_socket
         )
-        mensagem_registo.send_message_TCP()
+        mensagem_registo.send_message()
 
     # No método receive_task do agente
     def receive_task(self):
@@ -95,7 +103,6 @@ class NMS_Agent:
         
         self.collect_metrics(device_id, metrics, link_metrics)
         self.check_alerts(device_id, alert_conditions)
-
 
     def collect_metrics(self, device_id, metrics, link_metrics):
         print(f"[DEBUG - collect_metrics] Coletando métricas para o dispositivo {device_id}")
@@ -193,10 +200,8 @@ class NMS_Agent:
             elif option == "3":
                 self.receive_task()
             elif option == "4":
-                if debug == True:
-                    print("Debug mode ativado.")
-                else:
-                    print("Debug mode desativado.")
+                debug = not debug
+                print(f"Debug mode {'ativado' if debug else 'desativado'}.")
             else:
                 print("Opção inválida. Tente novamente.")
 

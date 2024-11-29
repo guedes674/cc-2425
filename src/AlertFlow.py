@@ -10,13 +10,13 @@ import socket
 #   - 6) Mensagem de Erro                -> Por fazer
 
 class TCP:
-    def __init__(self, tipo, dados, identificador, endereco, porta):
+    def __init__(self, tipo, dados, identificador, endereco, porta, socket):
         self.tipo = tipo                    
         self.dados = dados.encode('utf-8')  # Conteúdo da mensagem codificado para TCP
         self.tamanho_dados = len(self.dados)
         self.identificador = identificador  # ID do NMS_Agent
-        self.endereco = endereco  # Endereço do servidor
-        self.porta = porta        # Porta do servidor
+        self.endereco = endereco            # Endereço do servidor
+        self.porta = porta                  # Porta do servidor
         self.socket = None
 
     def connect(self):
@@ -36,18 +36,38 @@ class TCP:
 
     # Serialização para TCP
     def serialize_tcp(self):
+        id_bytes = self.identificador.encode('utf-8')
+        tamanho_identificador = len(id_bytes)
         tamanho_dados = len(self.dados)
-        formato = f'!B H H {tamanho_dados}s'
-        return struct.pack(formato, self.tipo, self.identificador, self.tamanho_dados, self.dados)
+        formato = f'!B H H {tamanho_identificador}s {tamanho_dados}s'
+        return struct.pack(formato, self.tipo, tamanho_identificador, tamanho_dados, id_bytes, self.dados)
 
     @staticmethod
     def deserialize_tcp(mensagem_binaria):
-        tipo, identificador, tamanho_dados = struct.unpack('!B H H', mensagem_binaria[:5])
-        dados = struct.unpack(f'{tamanho_dados}s', mensagem_binaria[5:])[0].decode('utf-8')
-        return tipo, identificador, dados
+        try:
+            # Extrai os primeiros campos fixos: tipo, tamanho do identificador e tamanho dos dados
+            tipo, tamanho_identificador, tamanho_dados = struct.unpack('!B H H', mensagem_binaria[:5])
+            
+            # Define o formato dinâmico com base nos tamanhos extraídos
+            formato = f'{tamanho_identificador}s {tamanho_dados}s'
+            
+            # Extrai os bytes para o identificador e os dados
+            id_bytes, dados_bytes = struct.unpack(formato, mensagem_binaria[5:])
+            
+            # Decodifica os bytes para strings, com verificações de vazio
+            identificador = id_bytes.decode('utf-8') if id_bytes else "default_id"
+            dados = dados_bytes.decode('utf-8') if dados_bytes else ""
+                        
+            return tipo, identificador, dados
+        except Exception as e:
+            print(f"Erro ao desserializar a mensagem: {e}")
+            return None, None, None
+
+
+
 
     # Envio de mensagem TCP
-    def send_message_TCP(self):
+    def send_message(self):
         try:
             # Conectar se o socket não estiver conectado
             if self.socket is None:
@@ -65,12 +85,6 @@ class TCP:
             self.disconnect()
 
     # --------------------------------- Mensagens ----------------------------------------------------
-
-    # Criação da mensagem de registro (tipo 0)
-    def registo(self):
-        print(f"[AlertFlow] Registo do NMS_Agent com ID {self.identificador} no NMS_Server...")
-        mensagem_registro = TCP(0, "", self.identificador, self.endereco, self.porta)
-        mensagem_registro.send_message()
 
 
     # Mensagem de alerta (tipo 1)

@@ -6,7 +6,7 @@ from Tarefa import Tarefa
 # Go to right folder 
 # cd ../../../ && cd home/Documents/cc-2425
 
-debug = False
+debug = True
 
 def debug_print(message):
     if debug:
@@ -19,7 +19,7 @@ class NMS_Server:
         self.tasks = self.load_tasks_from_json()
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.tcp_socket = None
-        self.upd_started = False
+        self.server_running = True
     
     # Lê todos os arquivos JSON na pasta de configurações
     def load_tasks_from_json(self):
@@ -30,7 +30,6 @@ class NMS_Server:
             tarefa = Tarefa(config_path=json_file)  # A instância de Tarefa já chama o load_file
             tarefas.append(tarefa)
         return tarefas
-
 
     # Distribui as tarefas para os NMS_Agents via UDP
     def distribute_tasks(self,devices_task_sent):
@@ -88,7 +87,7 @@ class NMS_Server:
 
         while True:
             try:
-                msg, client_address = self.socket.recvfrom(1024)
+                msg, client_address = self.udp_socket.recvfrom(1024)
                 if not msg:
                     print("Mensagem vazia recebida. Continuando...")
                     continue
@@ -101,7 +100,7 @@ class NMS_Server:
                 
                 # Criando o ACK como uma instância UDP
                 ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=client_address[0], 
-                                    porta=client_address[1], socket=self.socket)
+                                    porta=client_address[1], socket=self.udp_socket)
                 ack_message.send_ack()
 
                 # Guardar ip do agente que acabou de se ligar
@@ -114,47 +113,93 @@ class NMS_Server:
                 print("Erro ao desserializar a mensagem:", e)
 
     # Função para tratar a conexão de um cliente em uma thread separada.
-    def handle_client_connection(conn, addr):
+    def handle_client_connection(self, conn, addr):
         debug_print(f"Conexão iniciada com {addr}")
+        
+        empty_msg_count = 0  # Contador para mensagens vazias consecutivas
+        max_empty_msgs = 10  # Limite antes de logar ou tomar ações adicionais
+
         try:
-            while True:
-                msg = conn.recv(1024)
-                if not msg:
-                    break  # Conexão encerrada pelo cliente
-                alert_type, device_id, current_value = TCP.deserialize_tcp(msg)
-                debug_print(f"Alerta recebido do dispositivo {device_id}: {alert_type}, Valor atual: {current_value}")
-        except Exception as e:
-            debug_print(f"Erro na conexão com {addr}: {e}")
+            while self.server_running:  # Mantém o servidor rodando enquanto permitido
+                try:
+                    msg = conn.recv(1024)  # Recebe até 1024 bytes
+                    
+                    if msg == b'':  # Mensagem vazia recebida
+                        empty_msg_count += 1  # Incrementa o contador de mensagens vazias
+                        
+                        # Apenas loga se atingir o limite
+                        if empty_msg_count == max_empty_msgs:
+                            debug_print(f"{addr} enviou {max_empty_msgs} mensagens vazias consecutivas.")
+                            empty_msg_count = 0  # Reseta o contador
+
+                        continue  # Continua aguardando mensagens
+                    
+                    # Reseta o contador caso uma mensagem válida seja recebida
+                    empty_msg_count = 0  
+
+                    # Log da mensagem bruta para depuração
+                    debug_print(f"Mensagem bruta recebida: {msg}")
+                    
+                    # Processa a mensagem recebida
+                    try:
+                        alert_type, device_id, current_value = TCP.deserialize_tcp(msg)
+                        debug_print(f"Alerta recebido do dispositivo {device_id}: {alert_type}, Valor atual: {current_value}")
+                    except Exception as e:
+                        debug_print(f"Erro ao desserializar a mensagem: {e}")
+                        # Continua aguardando mensagens mesmo após erro
+                    
+                except socket.timeout:
+                    debug_print(f"Timeout na conexão com {addr}, aguardando novas mensagens...")
+                    continue
+                except socket.error as e:
+                    debug_print(f"Erro de socket com {addr}: {e}")
+                    break  # Encerra a conexão em caso de erro crítico
+                except Exception as e:
+                    debug_print(f"Erro inesperado na conexão com {addr}: {e}")
+                    break  # Encerra em caso de erro inesperado
+        
         finally:
+            # Fecha a conexão ao sair do loop
             debug_print(f"Conexão encerrada com {addr}")
             conn.close()
+
+
+
+
+
 
     # Configura o servidor TCP para receber alertas críticos dos NMS_Agents.
     # Lida com múltiplas conexões utilizando threads.
     def start_tcp_server(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_socket:
-            LOCAL_ADR = "10.0.5.10"
-            PORT = 9000
-            tcp_socket.bind((LOCAL_ADR, PORT))
-            tcp_socket.listen(5)
+        LOCAL_ADR = "10.0.5.10"
+        PORT = 5000
+        
+        try:
+            # Inicializa o socket TCP apenas uma vez
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_socket:
+                tcp_socket.bind((LOCAL_ADR, PORT))
+                tcp_socket.listen(5)  
+                debug_print(f"Servidor TCP escutando em {LOCAL_ADR}:{PORT}")
+                
+                while True:
+                    try:
+                        # Aceita conexões de clientes
+                        conn, addr = tcp_socket.accept()
+                        print(f"Conexão aceita de {addr}")
+                        
+                        # Cria uma thread para tratar a conexão do cliente
+                        client_thread = threading.Thread(
+                            target=self.handle_client_connection, args=(conn, addr), daemon=True
+                        )
+                        client_thread.start()
 
-            debug_print("Servidor TCP esperando por conexões de alertas...")
+                    except Exception as e:
+                        print(f"Erro ao aceitar conexão: {e}")
 
-            while True:
-                try:
-                    # Aceita conexões de clientes
-                    conn, addr = tcp_socket.accept()
-
-                    # Cria uma thread para tratar a conexão do cliente
-                    client_thread = threading.Thread(target=handle_client_connection, args=(conn, addr), daemon=True)
-                    client_thread.start()
-
-                    debug_print(f"Thread criada para conexão com {addr}")
-                except KeyboardInterrupt:
-                    debug_print("Servidor interrompido pelo usuário.")
-                    break
-                except Exception as e:
-                    debug_print(f"Erro no servidor: {e}")
+        except KeyboardInterrupt:
+            print("Servidor encerrado pelo usuário.")
+        except Exception as e:
+            print(f"Erro no servidor TCP: {e}")
 
     def run(self):
         global debug
@@ -167,16 +212,18 @@ class NMS_Server:
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
+                self.server_running = False
+                print("Servidor encerrado.")
                 break
             elif option == "1":
                 self.start_tcp_server()
             elif option == "2":
-                self.start_udp_server()
+                threading.Thread(target=self.start_udp_server).start()
             elif option == "3":
                 self.initialize_tasks()
             elif option == "4":
-                debug = True
-                print("Debug mode ativado.")
+                debug = not debug
+                print(f"Debug mode {'ativado' if debug else 'desativado'}.")
             else:
                 print("Opção inválida. Tente novamente.")
 
