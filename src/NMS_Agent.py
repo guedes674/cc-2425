@@ -14,7 +14,6 @@ class NMS_Agent:
         self.server_endereco = server_endereco
         self.server_porta = server_porta
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.tcp_socket = None
 
     # Obtém o endereço IP local do dispositivo (ID do NMS_Agent)
     def get_device_address(self):
@@ -40,19 +39,7 @@ class NMS_Agent:
             socket=self.socket
         )
         mensagem_registo.send_message()
-
-    # Usando a função registo do AlertFlow para registar o NMS_Agent
-    def connect_to_TCP_server(self):
-        mensagem_registo = TCP(
-            tipo=1,
-            dados="teste",
-            identificador=self.id,
-            endereco=self.server_endereco,
-            porta=self.server_porta,
-            socket=self.tcp_socket
-        )
-        mensagem_registo.send_message()
-
+        
     # No método receive_task do agente
     def receive_task(self):
         print("[DEBUG - receive_task] Aguardando tarefas do NMS_Server...")
@@ -90,8 +77,6 @@ class NMS_Agent:
                 print(f"[ERRO - receive_task] Falha ao receber mensagem: {e}")
 
     def process_task(self, task):
-        # Converter JSON para dicionário
-
         # Exemplo de operações:
         device_id = task.get('device_id')
         metrics = task.get('device_metrics')
@@ -100,7 +85,6 @@ class NMS_Agent:
         self.perform_network_tests(device_id, link_metrics)
 
         # Chamar funções para monitoramento de métricas ou alertas
-        
         self.collect_metrics(device_id, metrics, link_metrics)
         self.check_alerts(device_id, alert_conditions)
 
@@ -185,21 +169,18 @@ class NMS_Agent:
         global debug
         while True:
             print(f"Bem vindo Agente {self.id}")
-            print("1 - Iniciar AlertFlow")
-            print("2 - Iniciar NetTask")
-            print("3 - Iniciar Tarefas")
-            print("4 - Debug mode")
+            print("1 - Iniciar NetTask")
+            print("2 - Iniciar Tarefas")
+            print("3 - Debug mode")
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
                 break
             elif option == "1":
-                self.connect_to_TCP_server()
-            elif option == "2":
                 self.connect_to_UDP_server()
-            elif option == "3":
+            elif option == "2":
                 self.receive_task()
-            elif option == "4":
+            elif option == "3":
                 debug = not debug
                 print(f"Debug mode {'ativado' if debug else 'desativado'}.")
             else:

@@ -38,23 +38,20 @@ class TCP:
             print(f"Erro ao desserializar a mensagem: {e}")
             return None, None, None
 
-
-
-
     # Envio de mensagem TCP
     def send_message(self):
-    try:
-        # Cria o socket e conecta ao servidor
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect((self.endereco, self.porta))
-            print(f"Conexão estabelecida com {self.endereco}:{self.porta}")
-            
-            # Serializa a mensagem e a envia
-            mensagem_binaria = self.serialize_tcp()
-            sock.sendall(mensagem_binaria)
-            print("Mensagem enviada com sucesso.")
-    except Exception as e:
-        print(f"Erro ao enviar mensagem: {e}")
+        try:
+            # Cria o socket e conecta ao servidor
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((self.endereco, self.porta))
+                print(f"Conexão estabelecida com {self.endereco}:{self.porta}")
+                
+                # Serializa a mensagem e a envia
+                mensagem_binaria = self.serialize_tcp()
+                sock.sendall(mensagem_binaria)
+                print("Mensagem enviada com sucesso.")
+        except Exception as e:
+            print(f"Erro ao enviar mensagem: {e}")
 
 
     # --------------------------------- Mensagens ----------------------------------------------------
@@ -64,7 +61,7 @@ class TCP:
         # Envia um alerta via AlertFlow (TCP) quando uma condição é ultrapassada
         alert_data = f"Alert: {alert_type} on {device_id}. Current value: {current_value}"
         alert_message = TCP(
-            tipo=1,
+            tipo=2,
             dados=alert_data,
             identificador=device_id,
             endereco=server_address,
@@ -77,7 +74,7 @@ class TCP:
         status = self.get_device_interface_stats(device_id)
         status_data = f"Status: {status} on {device_id}"
         status_message = TCP(
-            tipo=2, 
+            tipo=3, 
             dados=status_data, 
             identificador=device_id,
             endereco=server_address, 
@@ -90,7 +87,7 @@ class TCP:
         latency = self.get_link_band_latency(device_id)
         latency_data = f"Latency: {latency} on {device_id}"
         latency_message = TCP(
-            tipo=3, 
+            tipo=4, 
             dados=latency_data,
             identificador=device_id,
             endereco=server_address,
@@ -101,7 +98,7 @@ class TCP:
     def trigger_metrics_collection(self, device_id, metrics_type, metrics_data, server_address, server_port):
         metrics_data_str = f"Metrics {metrics_type} on {device_id}: {metrics_data}"
         metrics_message = TCP(
-            tipo=4,
+            tipo=5,
             dados=metrics_data_str,
             identificador=device_id,
             endereco=server_address,
@@ -112,7 +109,7 @@ class TCP:
     def trigger_error(self, device_id, error_message, server_address, server_port):
         error_data = f"Error on {device_id}: {error_message}"
         error_message = TCP(
-            tipo=,
+            tipo=6,
             dados=error_data,
             identificador=device_id,
             endereco=server_address,
@@ -123,7 +120,7 @@ class TCP:
     def trigger_acknowledgment(self, device_id, ack_message, server_address, server_port):
         ack_data = f"ACK from {device_id}: {ack_message}"
         ack_message = TCP(
-            tipo=,
+            tipo=7,
             dados=ack_data,
             identificador=device_id,
             endereco=server_address,

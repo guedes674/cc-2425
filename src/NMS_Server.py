@@ -1,4 +1,4 @@
-import socket, os, glob, json, struct, threading
+import socket, os, glob, json, struct
 from AlertFlow import TCP
 from NetTask import UDP
 from Tarefa import Tarefa
@@ -6,7 +6,7 @@ from Tarefa import Tarefa
 # Go to right folder 
 # cd ../../../ && cd home/Documents/cc-2425
 
-debug = True
+debug = False
 
 def debug_print(message):
     if debug:
@@ -17,10 +17,8 @@ class NMS_Server:
         self.config_path = config_path
         self.agents = {}  # Dicionário onde cada chave é o device_id e o valor é o endereço IP/porta do agente
         self.tasks = self.load_tasks_from_json()
-        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.tcp_socket = None
-        self.server_running = True
-    
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.upd_started = False
     # Lê todos os arquivos JSON na pasta de configurações
     def load_tasks_from_json(self):
         json_files = glob.glob(os.path.join(self.config_path, '*.json'))
@@ -30,6 +28,7 @@ class NMS_Server:
             tarefa = Tarefa(config_path=json_file)  # A instância de Tarefa já chama o load_file
             tarefas.append(tarefa)
         return tarefas
+
 
     # Distribui as tarefas para os NMS_Agents via UDP
     def distribute_tasks(self,devices_task_sent):
@@ -87,7 +86,7 @@ class NMS_Server:
 
         while True:
             try:
-                msg, client_address = self.udp_socket.recvfrom(1024)
+                msg, client_address = self.socket.recvfrom(1024)
                 if not msg:
                     print("Mensagem vazia recebida. Continuando...")
                     continue
@@ -100,7 +99,7 @@ class NMS_Server:
                 
                 # Criando o ACK como uma instância UDP
                 ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=client_address[0], 
-                                    porta=client_address[1], socket=self.udp_socket)
+                                    porta=client_address[1], socket=self.socket)
                 ack_message.send_ack()
 
                 # Guardar ip do agente que acabou de se ligar
@@ -112,68 +111,51 @@ class NMS_Server:
             except struct.error as e:
                 print("Erro ao desserializar a mensagem:", e)
 
-    # Configura o servidor TCP para receber alertas críticos dos NMS_Agents.
-    # Lida com múltiplas conexões utilizando threads.
     def start_tcp_server(self):
-        LOCAL_ADR = "10.0.5.10"
-        PORT = 5000
-        
-        try:
-            # Inicializa o socket TCP apenas uma vez
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_socket:
-                tcp_socket.bind((LOCAL_ADR, PORT))
-                tcp_socket.listen(5)  
-                debug_print(f"Servidor TCP escutando em {LOCAL_ADR}:{PORT}")
-                
-                while True:
-                    try:
-                        # Aceita conexões de clientes
-                        conn, addr = tcp_socket.accept()
-                        print(f"Conexão aceita de {addr}")
-                        
-                        # Cria uma thread para tratar a conexão do cliente
-                        client_thread = threading.Thread(
-                            target=self.handle_client_connection, args=(conn, addr), daemon=True
-                        )
-                        client_thread.start()
+        # Configura o servidor TCP para receber alertas críticos dos NMS_Agents
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+            LOCAL_ADR = "10.0.5.10"
+            server_socket.bind((LOCAL_ADR, 9000))
+            server_socket.listen(5)
 
-                    except Exception as e:
-                        print(f"Erro ao aceitar conexão: {e}")
+            debug_print("Servidor TCP esperando por conexões de alertas...")
 
-        except KeyboardInterrupt:
-            print("Servidor encerrado pelo usuário.")
-        except Exception as e:
-            print(f"Erro no servidor TCP: {e}")
+            while True:
+                conn, addr = server_socket.accept()
+                with conn:
+                    debug_print(f"Conectado por {addr}")
+                    msg = conn.recv(1024)
+                    if msg:
+                        alert_type, device_id, current_value = TCP.deserialize_tcp(msg)
+                        debug_print(f"Alerta recebido do dispositivo {device_id}: {alert_type}, Valor atual: {current_value}")
 
     def run(self):
         global debug
+        LOCAL_ADR = "10.0.5.10"
+        self.socket.bind((LOCAL_ADR, 5000))
         while True:
             print("Iniciando servidor NMS...")
-            print("1 - Iniciar socket TCP")
-            print("2 - Iniciar socket UDP")
-            print("3 - Distribuir tarefas")
-            print("4 - Debug mode")
+            print("1 - Iniciar socket UDP")
+            print("2 - Distribuir tarefas")
+            print("3 - Debug mode")
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
-                self.server_running = False
-                print("Servidor encerrado.")
                 break
             elif option == "1":
-                self.start_tcp_server()
+                self.start_udp_server()
             elif option == "2":
-                threading.Thread(target=self.start_udp_server).start()
-            elif option == "3":
                 self.initialize_tasks()
-            elif option == "4":
-                debug = not debug
-                print(f"Debug mode {'ativado' if debug else 'desativado'}.")
+            elif option == "3":
+                debug = True
+                print("Debug mode ativado.")
             else:
                 print("Opção inválida. Tente novamente.")
 
 
 # Executando o servidor NMS
 if __name__ == "__main__":
+
     config_path = "./dataset"
     server = NMS_Server(config_path)
     server.run()
