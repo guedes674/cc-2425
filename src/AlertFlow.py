@@ -57,7 +57,8 @@ class TCP:
     # --------------------------------- Mensagens ----------------------------------------------------
 
     # Mensagem de alerta (tipo 1)
-    def trigger_alert(self, device_id, alert_type, current_value, server_address, server_port):
+    @staticmethod
+    def trigger_alert(device_id, alert_type, current_value, server_address, server_port):
         # Envia um alerta via AlertFlow (TCP) quando uma condição é ultrapassada
         alert_data = f"Alert: {alert_type} on {device_id}. Current value: {current_value}"
         alert_message = TCP(
@@ -70,7 +71,8 @@ class TCP:
         alert_message.send_message()
 
     # Mensagem de status interface (tipo 2)
-    def trigger_status_interface(self, device_id, server_address, server_port):
+    @staticmethod
+    def trigger_status_interface(device_id, server_address, server_port):
         status = self.get_device_interface_stats(device_id)
         status_data = f"Status: {status} on {device_id}"
         status_message = TCP(
@@ -83,7 +85,8 @@ class TCP:
         status_message.send_message()
 
     # Mensagem de latência (ping) (tipo 3)
-    def trigger_latency(self, device_id, server_address, server_port):
+    @staticmethod
+    def trigger_latency(device_id, server_address, server_port):
         latency = self.get_link_band_latency(device_id)
         latency_data = f"Latency: {latency} on {device_id}"
         latency_message = TCP(
@@ -95,7 +98,8 @@ class TCP:
             )
         latency_message.send_message()
 
-    def trigger_metrics_collection(self, device_id, metrics_type, metrics_data, server_address, server_port):
+    @staticmethod
+    def trigger_metrics_collection(device_id, metrics_type, metrics_data, server_address, server_port):
         metrics_data_str = f"Metrics {metrics_type} on {device_id}: {metrics_data}"
         metrics_message = TCP(
             tipo=5,
@@ -106,7 +110,8 @@ class TCP:
         )
         metrics_message.send_message()
 
-    def trigger_error(self, device_id, error_message, server_address, server_port):
+    @staticmethod
+    def trigger_error(device_id, error_message, server_address, server_port):
         error_data = f"Error on {device_id}: {error_message}"
         error_message = TCP(
             tipo=6,
@@ -117,7 +122,8 @@ class TCP:
         )
         error_message.send_message()
 
-    def trigger_acknowledgment(self, device_id, ack_message, server_address, server_port):
+    @staticmethod
+    def trigger_acknowledgment(device_id, ack_message, server_address, server_port):
         ack_data = f"ACK from {device_id}: {ack_message}"
         ack_message = TCP(
             tipo=7,
