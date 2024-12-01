@@ -1,4 +1,4 @@
-import socket, os, glob, json, struct
+import socket, os, glob, json, struct, threading, re
 from AlertFlow import TCP
 from NetTask import UDP
 from Tarefa import Tarefa
@@ -22,11 +22,11 @@ class NMS_Server:
     # Lê todos os arquivos JSON na pasta de configurações
     def load_tasks_from_json(self):
         json_files = glob.glob(os.path.join(self.config_path, '*.json'))
-        tarefas = []
+        tarefas = {}
         for json_file in json_files:
             print(f"Lendo configuração de: {json_file}")
             tarefa = Tarefa(config_path=json_file)  # A instância de Tarefa já chama o load_file
-            tarefas.append(tarefa)
+            tarefas.update(tarefa)
         return tarefas
 
 
@@ -35,7 +35,7 @@ class NMS_Server:
         if not self.tasks:
             print("Nenhuma tarefa carregada para distribuição.")
             return
-
+        
         for tarefa in self.tasks:
             task_id = tarefa.tasks[0]['task_id']
             frequency = tarefa.tasks[0]['frequency']
@@ -79,6 +79,64 @@ class NMS_Server:
         #for task in self.tasks:
         #    task.start_monitoring()
         print("Monitoramento iniciado para todas as tarefas.")
+
+
+    def place_holder(self):
+        if not self.tasks:
+            print("Nenhuma tarefa carregada para monitoramento.")
+            return
+
+        for task in self.tasks:
+            task_id = task.tasks[0]['task_id']
+            frequency = task.tasks[0]['frequency']
+            devices = task.tasks[0]['devices']
+
+            for device in devices:
+                thread = threading.Thread(target=self.monitoring_task, args=(task))
+                thread.start()
+
+                        
+    def monitoring_task(self,task):
+        devices = task.tasks[0]['devices']
+        for device in devices:
+            device_id = device.get('device_id')
+            device_metrics = device.get('device_metrics')
+            if device_metrics.get('cpu_usage') == True :
+                cpu_usage = device_metrics.get('cpu_usage')
+            if device_metrics.get('ram_usage') == True :
+                ram_usage = device_metrics.get('ram_usage')
+            link_metrics = device.get('link_metrics')
+            for metric in link_metrics:
+                bandwidth = metric.get('bandwidth')
+                latency = metric.get('latency')
+                jitter = metric.get('jitter')
+                packet_loss = metric.get('packet_loss')
+            alertflow_conditions = device.get('alertflow_conditions')
+            for condition in alertflow_conditions:
+                if ram_usage == True:
+                    ram_usage_threshold = condition.get('ram_usage_threshold')
+                if cpu_usage == True:
+                    cpu_usage_threshold = condition.get('cpu_usage_threshold')
+                jitter_threshold = condition.get('jitter_threshold')
+                bandwidth_threshold = condition.get('bandwidth_threshold')
+
+        current_metrics = json.loads(data.decode())
+
+        # Verifica se os thresholds foram ultrapassados
+        for condition in alertflow_conditions:
+            if ram_usage and current_metrics.get('ram_usage') > condition.get('ram_usage_threshold'):
+                print(f"Alerta: RAM usage no dispositivo {device_id} ultrapassou o threshold.")
+            if cpu_usage and current_metrics.get('cpu_usage') > condition.get('cpu_usage_threshold'):
+                print(f"Alerta: CPU usage no dispositivo {device_id} ultrapassou o threshold.")
+            for metric in link_metrics:
+                if current_metrics.get('bandwidth') > condition.get('bandwidth_threshold'):
+                    print(f"Alerta: Bandwidth no dispositivo {device_id} ultrapassou o threshold.")
+                if current_metrics.get('latency') > condition.get('latency_threshold'):
+                    print(f"Alerta: Latency no dispositivo {device_id} ultrapassou o threshold.")
+                if current_metrics.get('jitter') > condition.get('jitter_threshold'):
+                    print(f"Alerta: Jitter no dispositivo {device_id} ultrapassou o threshold.")
+                if current_metrics.get('packet_loss') > condition.get('packet_loss_threshold'):
+                    print(f"Alerta: Packet loss no dispositivo {device_id} ultrapassou o threshold.")
 
     def start_udp_server(self,devices_task_sent=[]):
         # Configura o servidor UDP para comunicação com os NMS_Agents
@@ -143,7 +201,7 @@ class NMS_Server:
             if option == "0":
                 break
             elif option == "1":
-                self.start_udp_server()
+                threading.Thread(target=self.start_udp_server).start()
             elif option == "2":
                 self.initialize_tasks()
             elif option == "3":

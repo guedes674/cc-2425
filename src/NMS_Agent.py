@@ -1,4 +1,4 @@
-import socket, json, os, subprocess
+import socket, json, os, subprocess, re, psutil
 from NetTask import UDP
 from AlertFlow import TCP
 
@@ -13,6 +13,7 @@ class NMS_Agent:
         self.id = self.get_device_address()    # Obter o endereço IP do prórprio nodo
         self.server_endereco = server_endereco
         self.server_porta = server_porta
+        self.metrics = {}
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # Obtém o endereço IP local do dispositivo (ID do NMS_Agent)
@@ -60,7 +61,7 @@ class NMS_Agent:
 
                     # Enviar um ACK de confirmação ao servidor
                     ack_message = UDP(tipo=99, dados='', identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
-                                      porta=self.server_porta, socket=self.socket)
+                                        porta=self.server_porta, socket=self.socket)
                     print(f"[DEBUG - send_ack] Enviando ACK para {self.server_endereco}:{self.server_porta}")
                     ack_message.send_ack()
 
@@ -85,8 +86,6 @@ class NMS_Agent:
         self.perform_network_tests(device_id, link_metrics)
 
         # Chamar funções para monitoramento de métricas ou alertas
-        self.collect_metrics(device_id, metrics, link_metrics)
-        self.check_alerts(device_id, alert_conditions)
 
     def collect_metrics(self, device_id, metrics, link_metrics):
         print(f"[DEBUG - collect_metrics] Coletando métricas para o dispositivo {device_id}")
@@ -120,6 +119,13 @@ class NMS_Agent:
 
         # Adicione lógica para enviar alertas ou notificações
         print(f"[DEBUG - check_alerts] Verificação de alertas concluída para o dispositivo {device_id}")
+
+    def update_metric(self,metrics):
+        for metric in metrics:
+            if self.metrics[metric]:
+                self.metrics[metric[0]] = tuple(self.metrics[metrics][0]+1,(self.metrics[metric][1]*self.metrics[metric][0] + metrics[metric][0])/self.metrics[metric][0]+1)
+            else:
+                self.metrics[metric[0]] = (1,metrics[metric])
 
     # Função para realizar aplicar as tarefas
     def perform_network_tests(self, device_id, link_metrics):
@@ -164,6 +170,38 @@ class NMS_Agent:
                     print(f"[DEBUG - perform_network_tests] Iperf test timed out.")
                     response.terminate()
                 print(f"[DEBUG - perform_network_tests] Iperf response for {device_id}: {response.stdout}")
+
+    def get_metrics(self, command, stdout):
+        # caso de ping
+        metrics = []
+        if command == 'ping':
+            # Parse ping output
+            packet_loss = re.search(r'(\d+)% packet loss', stdout).group(1)
+            tuple = ('packet_loss',packet_loss)
+            metrics.append(tuple)
+            avg_time = re.search(r'avg = ([\d.]+)', stdout).group(1)
+            metrics.append(tuple)
+            debug_print(f"Packet Loss: {packet_loss}%, Average Time: {avg_time} ms")
+            tuple = ('packet_loss',packet_loss)
+            metrics.append(tuple)
+            
+        # caso de iperf
+        elif command == 'iperf':
+            # Parse iperf output
+            bandwidth = re.search(r'(\d+ Mbits/sec)', stdout).group(1)
+            tuple = ('bandwidth',bandwidth)
+            metrics.append(tuple)
+            debug_print(f"Bandwidth: {bandwidth}")
+        else:
+            debug_print("Comando desconhecido")
+        cpu_usage = psutil.cpu_percent()
+        tuple = ('cpu_usage',cpu_usage)
+        metrics.append(tuple)
+    
+        ram_usage = psutil.virtual_memory().percent
+        tuple = ('ram_usage',ram_usage)
+        metrics.append(tuple)
+        return metrics
 
     def run(self):
         global debug

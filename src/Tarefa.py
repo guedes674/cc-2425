@@ -20,7 +20,8 @@ class Tarefa:
         
         task_id = task_data['task_id']
         frequency = task_data['frequency']
-        devices = []
+
+        dict = {}
         
         for device_data in task_data['devices']:
             device_id = device_data['device_id']
@@ -29,38 +30,27 @@ class Tarefa:
             alertflow_conditions = device_data['link_metrics'].get('alertflow_conditions', {})
 
             device = {
-                'device_id': device_id,
+                'frequency': frequency,
                 'device_metrics': device_metrics,
                 'link_metrics': link_metrics,
                 'alertflow_conditions': alertflow_conditions
             }
-            devices.append(device)
 
-        task = {
-            'task_id': task_id,
-            'frequency': frequency,
-            'devices': devices
-        }
-        self.tasks.append(task)
-
-    def create_tasks_dict(self):
-        for task in self.tasks:
-            devices = task['devices']
-            for device in devices:
-                device_id = device['device_id']
-                t = tuple(task['task_id'], device)
-                device_list = self.dict[device_id]
-                if device_list:
-                    for x in device_list:
-                        if not x[0]<t[0]:
-                            self.dict[device_id].append(t)
-                else:
-                    tuplelist = [t]
-                    self.dict.put(device_id, tuplelist)
+            t = tuple(task_id, device)
+            device_list = self.dict[device_id]
+            if device_list:
+                for x in device_list:
+                    if not x[0]<t[0]:
+                        dict[device_id].append(t)
+            else :
+                tuplelist = [t]
+                dict.put(device_id, tuplelist)
+        self.dict.update(dict)
+        return dict
 
     # Para cada tarefa, cria um processo de monitorização com a frequência definida
-    def start_monitoring(self):
-        for task in self.tasks:
+    def start_monitoring(self,tarefas):
+        for task in tarefas:
             frequency = task['frequency']
             devices = task['devices']
             print(f"Iniciando a tarefa {task['task_id']} com frequência de {frequency} segundos")
@@ -69,6 +59,7 @@ class Tarefa:
                 for device in devices:
                     self.monitor_device(device)
                 time.sleep(frequency)
+        return self.dict
 
     # Realiza a coleta de métricas do dispositivo e verifica as condições de alerta
     def monitor_device(self, device):
@@ -101,25 +92,3 @@ class Tarefa:
         jitter = self.get_link_jitter(device_id)
         if jitter > alertflow_conditions['jitter']:
             TCP.trigger_alert(device_id, "Jitter exceeded", jitter)
-
-    # Implementações simuladas para coleta das métricas --------------------------------------
-    def get_device_cpu_usage(self, device_id):
-        return 70
-
-    def get_device_ram_usage(self, device_id):
-        return 89
-
-    def get_interface_packet_rate(self, device_id, interface):
-        return 1850
-
-    def get_link_packet_loss(self, device_id):
-        return 250
-
-    def get_link_jitter(self, device_id):
-        return 920
-    
-    def get_link_latency(self, device_id):
-        return 123
-
-    def get_bandwidth(self, device_id):
-        return 29
