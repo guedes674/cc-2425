@@ -6,23 +6,19 @@ class Tarefa:
     def __init__(self, config_path):
         self.config_path = config_path
         self.tasks = []
+        self.dicts = dict()
         self.load_file()
-        self.dict = {}
 
     # Carrega, interpreta e armazena as informações das tarefas e dispositivos
     # a partir do arquivo JSON de configuração
     def load_file(self):
         with open(self.config_path, 'r') as file:
             config = json.load(file)
-
         # Caso onde "Task" é um dicionário único
-        task_data = config['Task']
-        
+        task_data = config['task']
         task_id = task_data['task_id']
         frequency = task_data['frequency']
 
-        dict = {}
-        
         for device_data in task_data['devices']:
             device_id = device_data['device_id']
             device_metrics = device_data['device_metrics']
@@ -36,17 +32,16 @@ class Tarefa:
                 'alertflow_conditions': alertflow_conditions
             }
 
-            t = tuple(task_id, device)
-            device_list = self.dict[device_id]
+            t = tuple((task_id, device))
+            device_list = self.dicts.get(device_id, [])
             if device_list:
                 for x in device_list:
                     if not x[0]<t[0]:
-                        dict[device_id].append(t)
+                        self.dicts[device_id].append(t)
             else :
                 tuplelist = [t]
-                dict.put(device_id, tuplelist)
-        self.dict.update(dict)
-        return dict
+                self.dicts[device_id] = tuplelist
+        return self.dicts
 
     # Para cada tarefa, cria um processo de monitorização com a frequência definida
     def start_monitoring(self,tarefas):

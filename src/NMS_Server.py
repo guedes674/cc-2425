@@ -26,9 +26,8 @@ class NMS_Server:
         for json_file in json_files:
             print(f"Lendo configuração de: {json_file}")
             tarefa = Tarefa(config_path=json_file)  # A instância de Tarefa já chama o load_file
-            tarefas.update(tarefa)
+            tarefas.update(tarefa.dicts)
         return tarefas
-
 
     # Distribui as tarefas para os NMS_Agents via UDP
     def distribute_tasks(self,devices_task_sent):

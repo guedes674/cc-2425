@@ -53,7 +53,6 @@ class TCP:
         except Exception as e:
             print(f"Erro ao enviar mensagem: {e}")
 
-
     # --------------------------------- Mensagens ----------------------------------------------------
 
     # Mensagem de alerta (tipo 1)

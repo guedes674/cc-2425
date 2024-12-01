@@ -1,5 +1,5 @@
 {
-  "Task": {
+  "task": {
     "task_id": "task-02",
     "frequency": 20,
     "devices": [
