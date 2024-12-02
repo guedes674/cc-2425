@@ -16,70 +16,39 @@ class NMS_Server:
     def __init__(self, config_path):
         self.config_path = config_path
         self.agents = {}  # Dicionário onde cada chave é o device_id e o valor é o endereço IP/porta do agente
-        self.tasks = self.load_tasks_from_json()
+        self.tasks = {}  # Dicionário onde cada chave é o device_id e o valor é a lista de tarefas a serem executadas
+        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_started = False
         self.tcp_started = False
         self.tcp_threads = []
-    
+        self.load_tasks_from_json()
+
     # Lê todos os arquivos JSON na pasta de configurações
     def load_tasks_from_json(self):
         json_files = glob.glob(os.path.join(self.config_path, '*.json'))
-        tarefas = {}
-        for json_file in json_files:
-            print(f"Lendo configuração de: {json_file}")
-            tarefa = Tarefa(config_path=json_file)  # A instância de Tarefa já chama o load_file
-            tarefas.update(tarefa.dicts)
-        return tarefas
+        tarefa = Tarefa(config_path=json_files)  # A instância de Tarefa já chama o load_file
+        self.tasks = tarefa.dict
+        debug_print(f"Tarefas carregadas:")
+        debug_print(json.dumps(self.tasks, indent=4))
 
     # Distribui as tarefas para os NMS_Agents via UDP
-    def distribute_tasks(self,devices_task_sent):
+    def distribute_tasks(self,address):
         if not self.tasks:
             print("Nenhuma tarefa carregada para distribuição.")
             return
         
-        for tarefa in self.tasks:
-            task_id = tarefa.tasks[0]['task_id']
-            frequency = tarefa.tasks[0]['frequency']
-            devices = tarefa.tasks[0]['devices']
-            debug_print(f"[DEBUG - Servidor] Iniciando distribuição da tarefa {task_id}")
-            
-            for device in devices:
-                device_id = device.get('device_id')
-                if device_id in devices_task_sent:
-                    debug_print(f"[DEBUG - Servidor] Tarefa {task_id} já enviada para o dispositivo {device_id}.")
-                    continue
-                if device_id not in self.agents:
-                    debug_print(f"[DEBUG - Servidor] Dispositivo {device_id} não encontrado na lista de agentes.")
-                    return False
-                devices_task_sent.append(device_id)
-                debug_print(f"[DEBUG - Servidor] Distribuindo tarefa {task_id} para o dispositivo {device_id}")
-                agent_ip, agent_port = self.agents.get(device_id)
-                debug_print(f"[DEBUG - Servidor] Preparando envio para o agente {device_id} no IP {agent_ip} e porta {agent_port}")
 
-                # Dados específicos do dispositivo
-                device_specific_data = device
-        
-                serialized_task = json.dumps(device_specific_data, separators=(',', ':')).encode('utf-8')
-                print(f"[IP]: {agent_ip}, [PORT]: {agent_port}")
-                # Criar e enviar a mensagem de tarefa para o dispositivo
-                task_message = UDP(2, serialized_task, identificador=device_id, sequencia=1, endereco=agent_ip, porta=agent_port, socket = self.socket)
-                if task_message.send_task():
-                    print(f"Tarefa {task_id} enviada para o dispositivo {device_id} no endereço {agent_ip}:{agent_port} com sucesso.")
-                else:
-                    print(f"Falha ao enviar a tarefa {task_id} para o dispositivo {device_id}. Nenhum ACK recebido após várias tentativas.")
-                return
-
-    def initialize_tasks(self,devices_task_sent=[]):
-        devices_task_sent = devices_task_sent
-        self.load_tasks_from_json()
-        sucess = self.distribute_tasks(devices_task_sent)
-        if not sucess:
-            print("Falha ao distribuir tarefas. Tentando novamente...")
-            self.start_udp_server(devices_task_sent)
-        # Inicia o monitoramento de todas as tarefas
-        for task in self.tasks:
-            task.start_monitoring()
-        print("Monitoramento iniciado para todas as tarefas.")
+        tasks_for_device = self.tasks.get(address)
+        agent_port = self.agents.get(address)[1]
+        print(json.dumps(tasks_for_device, indent=4))
+        agent_ip = self.agents.get(address)[0]
+        serialized_task = json.dumps(tasks_for_device, separators=(',', ':')).encode('utf-8')
+        task_message = UDP(2, serialized_task, identificador=address, sequencia=1, endereco=agent_ip, porta=agent_port, socket = self.udp_socket)
+        debug_print(f"[DEBUG - Servidor] Distribuindo tarefas para o dispositivo {address}")
+        if task_message.send_message():
+            print(f"Tarefa enviada com sucesso para o dispositivo {address}.")
+        else:
+            print(f"Erro ao enviar a tarefa para o dispositivo {address}")
 
 
     def place_holder(self):
@@ -143,7 +112,7 @@ class NMS_Server:
         """Listens for incoming UDP connections. Must be threaded."""
         self.udp_started = True
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as server_socket:
+            with self.udp_socket as server_socket:
                 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 LOCAL_ADR = "10.0.5.10"
                 server_socket.bind((LOCAL_ADR, 5000))
@@ -171,7 +140,7 @@ class NMS_Server:
                         # Guardar ip do agente que acabou de se ligar
                         self.agents[identificador] = (client_address[0], client_address[1])
                         debug_print(f"[DEBUG - agentes] Agentes registrados no servidor: {self.agents}")
-
+                        self.distribute_tasks(client_address[0])
                         #self.initialize_tasks(devices_task_sent)
                     except socket.timeout:
                         print("Tempo limite do socket atingido. Continuando...")
@@ -214,13 +183,11 @@ class NMS_Server:
 
     def run(self):
         global debug
-
         while True:
             print("Iniciando servidor NMS...")
             print("1 - Iniciar socket TCP")
             print("2 - Iniciar socket UDP")
-            print("3 - Distribuir tarefas")
-            print("4 - Debug mode")
+            print("3 - Debug mode")
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
@@ -236,8 +203,6 @@ class NMS_Server:
                 else:
                     print("Servidor UDP já está em execução.")
             elif option == "3":
-                self.initialize_tasks()
-            elif option == "4":
                 debug = not debug
                 print(f"Debug mode {'ativado' if debug else 'desativado'}.")
             else:

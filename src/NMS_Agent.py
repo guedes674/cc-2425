@@ -41,8 +41,10 @@ class NMS_Agent:
             porta=self.udp_porta, 
             socket=self.udp_socket
         )
+        self.udp_socket = mensagem_registo.socket
         mensagem_registo.send_message()
-
+        self.receive_task()
+        
     # Usando a função registo do AlertFlow para registar o NMS_Agent
     def connect_to_TCP_server(self):
         mensagem_registo = TCP(
@@ -53,6 +55,7 @@ class NMS_Agent:
             porta=self.tcp_porta,
             socket=self.tcp_socket
         )
+        self.tcp_socket = mensagem_registo.socket
         mensagem_registo.send_message()
         
     # No método receive_task do agente
@@ -61,25 +64,25 @@ class NMS_Agent:
         while True:
             try:
                 # Recebe a mensagem e o endereço de onde ela foi enviada
-                data, addr = self.socket.recvfrom(4096)
+                data, addr = self.udp_socket.recvfrom(4096)
                 print(f"[DEBUG - receive_task] Mensagem recebida de {addr[0]} na porta {addr[1]}")  # addr[0] -> IP, addr[1] -> Porta
 
                 # Desserializar a mensagem recebida para extrair a sequência, identificador e dados
                 sequencia, identificador, dados = UDP.desserialize(data)
+                print(dados)
+                print(f"[DEBUG - receive_task] Tipo de dados recebidos: {type(dados)}")
                 print(f"[DEBUG - receive_task] Sequência: {sequencia}, Identificador: {identificador}")
 
                 # Verificar se a tarefa é direcionada ao agente correto
                 if identificador == self.id:
                     task_data = json.loads(dados)
-                    print(f"[DEBUG - receive_task] Tarefa recebida e processada: {task_data.get('task_id')}")
-
                     # Enviar um ACK de confirmação ao servidor
                     ack_message = UDP(tipo=99, dados='', identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
-                                        porta=self.server_porta, socket=self.socket)
-                    print(f"[DEBUG - send_ack] Enviando ACK para {self.server_endereco}:{self.server_porta}")
+                                        porta=self.udp_porta, socket=self.udp_socket)
+                    print(f"[DEBUG - send_ack] Enviando ACK para {self.server_endereco}:{self.udp_porta}")
                     ack_message.send_ack()
-
                     # Processar a tarefa recebida
+                    print(f"[DEBUG - receive_task] Processando tarefa: {task_data}")
                     self.process_task(task_data)
                 else:
                     print(f"[DEBUG - receive_task] Tarefa não direcionada para este agente. Ignorada.")
@@ -91,13 +94,13 @@ class NMS_Agent:
             except Exception as e:
                 print(f"[ERRO - receive_task] Falha ao receber mensagem: {e}")
 
+
     def process_task(self, task):
         # Exemplo de operações:
-        device_id = task.get('device_id')
-        metrics = task.get('device_metrics')
-        link_metrics = task.get('link_metrics')
-        alert_conditions = task.get('link_metrics').get('alertflow_conditions')
-        self.perform_network_tests(device_id, link_metrics)
+        pass
+        #metrics = task.get('device_metrics')
+        #link_metrics = task.get('link_metrics')
+        #alert_conditions = task.get('link_metrics').get('alertflow_conditions')
 
         # Chamar funções para monitoramento de métricas ou alertas
 
@@ -223,8 +226,7 @@ class NMS_Agent:
             print(f"Bem vindo Agente {self.id}")
             print("1 - Iniciar AlertFlow")
             print("2 - Iniciar NetTask")
-            print("3 - Iniciar Tarefas")
-            print("4 - Debug mode")
+            print("3 - Debug mode")
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
@@ -233,8 +235,6 @@ class NMS_Agent:
                 self.connect_to_TCP_server()
             elif option == "2":
                 self.connect_to_UDP_server()
-            elif option == "3":
-                self.receive_task()
             elif option == "4":
                 debug = not debug
                 print(f"Debug mode {'ativado' if debug else 'desativado'}.")

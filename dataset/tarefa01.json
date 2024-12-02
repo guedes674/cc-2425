@@ -44,11 +44,12 @@
           }
         },
         "alertflow_conditions": {
-          "ram_usage": 90,
-          "packet_loss": 3,
-          "jitter": 100,
-          "bandwidth_utilization": 80
-        }
+              "cpu_usage": 80,
+              "ram_usage": 90,
+              "interface_stats": 2000,
+              "packet_loss": 5,
+              "jitter": 100
+              }
       }
     ]
   }

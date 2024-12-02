@@ -6,13 +6,18 @@ class Tarefa:
     def __init__(self, config_path):
         self.config_path = config_path
         self.tasks = []
-        self.dicts = dict()
-        self.load_file()
+        self.dict = {}
+        self.load_files()
 
     # Carrega, interpreta e armazena as informações das tarefas e dispositivos
     # a partir do arquivo JSON de configuração
-    def load_file(self):
-        with open(self.config_path, 'r') as file:
+
+    def load_files(self):
+        for file in self.config_path:
+            self.load_file(file)
+
+    def load_file(self,file):
+        with open(file, 'r') as file:
             config = json.load(file)
         # Caso onde "Task" é um dicionário único
         task_data = config['task']
@@ -23,7 +28,7 @@ class Tarefa:
             device_id = device_data['device_id']
             device_metrics = device_data['device_metrics']
             link_metrics = device_data['link_metrics']
-            alertflow_conditions = device_data['link_metrics'].get('alertflow_conditions', {})
+            alertflow_conditions = device_data['alertflow_conditions']
 
             device = {
                 'frequency': frequency,
@@ -33,15 +38,13 @@ class Tarefa:
             }
 
             t = tuple((task_id, device))
-            device_list = self.dicts.get(device_id, [])
+            device_list = self.dict.get(device_id)
             if device_list:
-                for x in device_list:
-                    if not x[0]<t[0]:
-                        self.dicts[device_id].append(t)
+                self.dict[device_id].append(t)
+                self.dict[device_id] = sorted(self.dict[device_id], key=lambda x: x[0])
             else :
                 tuplelist = [t]
-                self.dicts[device_id] = tuplelist
-        return self.dicts
+                self.dict[device_id] = tuplelist
 
     # Para cada tarefa, cria um processo de monitorização com a frequência definida
     def start_monitoring(self,tarefas):

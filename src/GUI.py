@@ -6,7 +6,6 @@ class MetricsViewer:
         self.root = tk.Tk()
         self.root.title("NMS Metrics Viewer")
         self.metrics_data = {}  # Estrutura para armazenar as métricas recebidas
-
         self.create_gui()
 
     def create_gui(self):
@@ -40,7 +39,7 @@ class MetricsViewer:
         # Botão para atualizar métricas manualmente
         refresh_button = tk.Button(self.root, text="Atualizar Métricas", command=self.refresh_metrics)
         refresh_button.grid(row=2, column=0, columnspan=4, pady=5, sticky="ns")
-            
+
     def add_metric(self, client_id, metric_name, value, state):
         row = len(self.metrics_data) + 1
         self.metrics_data[(client_id, metric_name)] = {"value": value, "state": state}
