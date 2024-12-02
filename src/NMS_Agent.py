@@ -9,12 +9,14 @@ def debug_print(message):
         print(message)
 
 class NMS_Agent:
-    def __init__(self, server_endereco, server_porta):
+    def __init__(self, server_endereco, tcp_porta, udp_porta):
         self.id = self.get_device_address()    # Obter o endereço IP do prórprio nodo
         self.server_endereco = server_endereco
-        self.server_porta = server_porta
+        self.tcp_porta = tcp_porta
+        self.udp_porta = udp_porta
+        self.tcp_socket = None
+        self.udp_socket = None
         self.metrics = {}
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # Obtém o endereço IP local do dispositivo (ID do NMS_Agent)
     def get_device_address(self):
@@ -36,8 +38,20 @@ class NMS_Agent:
             identificador=self.id, 
             sequencia=1, 
             endereco=self.server_endereco, 
-            porta=self.server_porta, 
-            socket=self.socket
+            porta=self.udp_porta, 
+            socket=self.udp_socket
+        )
+        mensagem_registo.send_message()
+
+    # Usando a função registo do AlertFlow para registar o NMS_Agent
+    def connect_to_TCP_server(self):
+        mensagem_registo = TCP(
+            tipo=1, 
+            dados="", 
+            identificador=self.id, 
+            endereco=self.server_endereco, 
+            porta=self.tcp_porta,
+            socket=self.tcp_socket
         )
         mensagem_registo.send_message()
         
@@ -207,23 +221,26 @@ class NMS_Agent:
         global debug
         while True:
             print(f"Bem vindo Agente {self.id}")
-            print("1 - Iniciar NetTask")
-            print("2 - Iniciar Tarefas")
-            print("3 - Debug mode")
+            print("1 - Iniciar AlertFlow")
+            print("2 - Iniciar NetTask")
+            print("3 - Iniciar Tarefas")
+            print("4 - Debug mode")
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
                 break
             elif option == "1":
-                self.connect_to_UDP_server()
+                self.connect_to_TCP_server()
             elif option == "2":
-                self.receive_task()
+                self.connect_to_UDP_server()
             elif option == "3":
+                self.receive_task()
+            elif option == "4":
                 debug = not debug
                 print(f"Debug mode {'ativado' if debug else 'desativado'}.")
             else:
                 print("Opção inválida. Tente novamente.")
 
 if __name__ == "__main__":
-    nms_agent = NMS_Agent(server_endereco="10.0.5.10", server_porta=5000)
+    nms_agent = NMS_Agent(server_endereco="10.0.5.10", tcp_porta=9000, udp_porta=5000)
     nms_agent.run()

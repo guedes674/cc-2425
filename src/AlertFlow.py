@@ -1,13 +1,20 @@
 import struct, socket
 
 class TCP:
-    def __init__(self, tipo, dados, identificador, endereco, porta):
+    def __init__(self, tipo, dados, identificador, endereco, porta, socket=None):
         self.tipo = tipo                    
         self.dados = dados.encode('utf-8')  # Conteúdo da mensagem codificado para TCP
         self.tamanho_dados = len(self.dados)
         self.identificador = identificador  # ID do NMS_Agent
         self.endereco = endereco            # Endereço do servidor
         self.porta = porta                  # Porta do servidor
+        self.socket = socket if socket else self.create_socket()
+
+    def create_socket(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((self.endereco, self.porta))
+        print(f"Conexão estabelecida com {self.endereco}:{self.porta}")
+        return sock
 
     # Serialização para TCP
     def serialize_tcp(self):
@@ -41,21 +48,16 @@ class TCP:
     # Envio de mensagem TCP
     def send_message(self):
         try:
-            # Cria o socket e conecta ao servidor
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect((self.endereco, self.porta))
-                print(f"Conexão estabelecida com {self.endereco}:{self.porta}")
-                
-                # Serializa a mensagem e a envia
-                mensagem_binaria = self.serialize_tcp()
-                sock.sendall(mensagem_binaria)
-                print("Mensagem enviada com sucesso.")
+            # Serializa a mensagem e a envia
+            mensagem_binaria = self.serialize_tcp()
+            self.socket.sendall(mensagem_binaria)
+            print("Mensagem enviada com sucesso.")
         except Exception as e:
             print(f"Erro ao enviar mensagem: {e}")
 
     # --------------------------------- Mensagens ----------------------------------------------------
 
-    # Mensagem de alerta (tipo 1)
+    # Mensagem de alerta (tipo 2)
     @staticmethod
     def trigger_alert(device_id, alert_type, current_value, server_address, server_port):
         # Envia um alerta via AlertFlow (TCP) quando uma condição é ultrapassada
@@ -69,7 +71,7 @@ class TCP:
         )
         alert_message.send_message()
 
-    # Mensagem de status interface (tipo 2)
+    # Mensagem de status interface (tipo 3)
     @staticmethod
     def trigger_status_interface(device_id, server_address, server_port):
         status = self.get_device_interface_stats(device_id)
@@ -83,7 +85,7 @@ class TCP:
         )
         status_message.send_message()
 
-    # Mensagem de latência (ping) (tipo 3)
+    # Mensagem de latência (ping) (tipo 4)
     @staticmethod
     def trigger_latency(device_id, server_address, server_port):
         latency = self.get_link_band_latency(device_id)

@@ -6,7 +6,7 @@ from Tarefa import Tarefa
 # Go to right folder 
 # cd ../../../ && cd home/Documents/cc-2425
 
-debug = False
+debug = True
 
 def debug_print(message):
     if debug:
@@ -19,6 +19,8 @@ class NMS_Server:
         self.tasks = self.load_tasks_from_json()
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.upd_started = False
+        self.tcp_threads = []
+    
     # Lê todos os arquivos JSON na pasta de configurações
     def load_tasks_from_json(self):
         json_files = glob.glob(os.path.join(self.config_path, '*.json'))
@@ -75,8 +77,8 @@ class NMS_Server:
             print("Falha ao distribuir tarefas. Tentando novamente...")
             self.start_udp_server(devices_task_sent)
         # Inicia o monitoramento de todas as tarefas
-        #for task in self.tasks:
-        #    task.start_monitoring()
+        for task in self.tasks:
+            task.start_monitoring()
         print("Monitoramento iniciado para todas as tarefas.")
 
 
@@ -163,28 +165,39 @@ class NMS_Server:
                 self.agents[identificador] = (client_address[0], client_address[1])
                 debug_print(f"[DEBUG - agentes] Agentes registrados no servidor: {self.agents}")
 
-                self.initialize_tasks(devices_task_sent)
+                #self.initialize_tasks(devices_task_sent)
                 
             except struct.error as e:
                 print("Erro ao desserializar a mensagem:", e)
 
     def start_tcp_server(self):
-        # Configura o servidor TCP para receber alertas críticos dos NMS_Agents
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            LOCAL_ADR = "10.0.5.10"
-            server_socket.bind((LOCAL_ADR, 9000))
-            server_socket.listen(5)
-
-            debug_print("Servidor TCP esperando por conexões de alertas...")
-
-            while True:
-                conn, addr = server_socket.accept()
-                with conn:
+        """Listens for incoming TCP connections. Must be threaded. Passive method should close the connection, not the socket."""
+        self.tcp_server = True
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+                LOCAL_ADR = "10.0.5.10"
+                server_socket.bind((LOCAL_ADR, 9000))
+                server_socket.listen(5)
+                debug_print("Servidor TCP esperando por conexões de alertas...")
+    
+                while self.tcp_server:
+                    conn, addr = server_socket.accept()
                     debug_print(f"Conectado por {addr}")
-                    msg = conn.recv(1024)
-                    if msg:
-                        alert_type, device_id, current_value = TCP.deserialize_tcp(msg)
-                        debug_print(f"Alerta recebido do dispositivo {device_id}: {alert_type}, Valor atual: {current_value}")
+                    thread = threading.Thread(target=self.handle_connection, args=(conn, addr))
+                    self.tcp_threads.append(thread)
+                    thread.start()
+        except Exception as e:
+            debug_print(f"Error while setting up server on {LOCAL_ADR}:9000: {e}")
+        finally:
+            for thread in self.tcp_threads:
+                thread.join()
+    
+    def handle_connection(self, conn, addr):
+        with conn:
+            msg = conn.recv(1024)
+            if msg:
+                alert_type, device_id, current_value = TCP.deserialize_tcp(msg)
+                debug_print(f"Alerta recebido do dispositivo {device_id}: {alert_type}, Valor atual: {current_value}")
 
     def run(self):
         global debug
@@ -192,18 +205,21 @@ class NMS_Server:
         self.socket.bind((LOCAL_ADR, 5000))
         while True:
             print("Iniciando servidor NMS...")
-            print("1 - Iniciar socket UDP")
-            print("2 - Distribuir tarefas")
-            print("3 - Debug mode")
+            print("1 - Iniciar socket TCP")
+            print("2 - Iniciar socket UDP")
+            print("3 - Distribuir tarefas")
+            print("4 - Debug mode")
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
                 break
             elif option == "1":
-                threading.Thread(target=self.start_udp_server).start()
+                threading.Thread(target=self.start_tcp_server).start()
             elif option == "2":
-                self.initialize_tasks()
+                threading.Thread(target=self.start_udp_server).start()
             elif option == "3":
+                self.initialize_tasks()
+            elif option == "4":
                 debug = True
                 print("Debug mode ativado.")
             else:
@@ -212,7 +228,6 @@ class NMS_Server:
 
 # Executando o servidor NMS
 if __name__ == "__main__":
-
     config_path = "./dataset"
     server = NMS_Server(config_path)
     server.run()
