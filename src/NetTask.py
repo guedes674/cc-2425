@@ -10,8 +10,14 @@ class UDP:
         self.sequencia = sequencia               # Número de sequência para NetTask (UDP)
         self.endereco = endereco                 # Endereço do servidor
         self.porta = porta                       # Porta do servidor
-        self.socket = socket if socket else socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Reutiliza o socket, se disponível
+        self.socket = socket if socket else self.create_socket()
     
+    def create_socket(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect((self.endereco, self.porta))
+        print(f"Conexão estabelecida com {self.endereco}:{self.porta}")
+        return sock
+
     # --------------------------- UDP ---------------------------
 
     # Antes de enviar um pacote, devemos serializá-lo (mudar para formato binário)

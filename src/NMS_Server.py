@@ -17,8 +17,8 @@ class NMS_Server:
         self.config_path = config_path
         self.agents = {}  # Dicionário onde cada chave é o device_id e o valor é o endereço IP/porta do agente
         self.tasks = self.load_tasks_from_json()
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.upd_started = False
+        self.udp_started = False
+        self.tcp_started = False
         self.tcp_threads = []
     
     # Lê todos os arquivos JSON na pasta de configurações
@@ -139,40 +139,53 @@ class NMS_Server:
                 if current_metrics.get('packet_loss') > condition.get('packet_loss_threshold'):
                     print(f"Alerta: Packet loss no dispositivo {device_id} ultrapassou o threshold.")
 
-    def start_udp_server(self,devices_task_sent=[]):
-        # Configura o servidor UDP para comunicação com os NMS_Agents
-        print("Servidor UDP esperando por conexões...")
+    def start_udp_server(self, devices_task_sent=[]):
+        """Listens for incoming UDP connections. Must be threaded."""
+        self.udp_started = True
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as server_socket:
+                server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                LOCAL_ADR = "10.0.5.10"
+                server_socket.bind((LOCAL_ADR, 5000))
+                server_socket.settimeout(None)  # Garantir que o socket não tenha um tempo limite
+                print("Servidor UDP esperando por conexões...")
 
-        while True:
-            try:
-                msg, client_address = self.socket.recvfrom(1024)
-                if not msg:
-                    print("Mensagem vazia recebida. Continuando...")
-                    continue
+                while self.udp_started:
+                    try:
+                        msg, client_address = server_socket.recvfrom(1024)
+                        if not msg:
+                            print("Mensagem vazia recebida. Continuando...")
+                            continue
 
-                print(f"Mensagem recebida de {client_address}")
+                        print(f"Mensagem recebida de {client_address}")
 
-                # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
-                sequencia, identificador, dados = UDP.desserialize(msg)
-                debug_print(f"[DEBUG - dados udp] Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados}")
+                        # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
+                        sequencia, identificador, dados = UDP.desserialize(msg)
+                        debug_print(f"[DEBUG - dados udp] Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados}")
+                        
+                        # Criando o ACK como uma instância UDP
+                        ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=client_address[0], 
+                                            porta=client_address[1], socket=server_socket)
+                        ack_message.send_ack()
+
+                        # Guardar ip do agente que acabou de se ligar
+                        self.agents[identificador] = (client_address[0], client_address[1])
+                        debug_print(f"[DEBUG - agentes] Agentes registrados no servidor: {self.agents}")
+
+                        #self.initialize_tasks(devices_task_sent)
+                    except socket.timeout:
+                        print("Tempo limite do socket atingido. Continuando...")
+                        continue
                 
-                # Criando o ACK como uma instância UDP
-                ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=client_address[0], 
-                                    porta=client_address[1], socket=self.socket)
-                ack_message.send_ack()
+        except struct.error as e:
+            print("Erro ao desserializar a mensagem:", e)
+        except OSError as e:
+            print(f"OSError: {e}")
 
-                # Guardar ip do agente que acabou de se ligar
-                self.agents[identificador] = (client_address[0], client_address[1])
-                debug_print(f"[DEBUG - agentes] Agentes registrados no servidor: {self.agents}")
-
-                #self.initialize_tasks(devices_task_sent)
-                
-            except struct.error as e:
-                print("Erro ao desserializar a mensagem:", e)
 
     def start_tcp_server(self):
         """Listens for incoming TCP connections. Must be threaded. Passive method should close the connection, not the socket."""
-        self.tcp_server = True
+        self.tcp_started = True
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
                 LOCAL_ADR = "10.0.5.10"
@@ -180,7 +193,7 @@ class NMS_Server:
                 server_socket.listen(5)
                 debug_print("Servidor TCP esperando por conexões de alertas...")
     
-                while self.tcp_server:
+                while self.tcp_started:
                     conn, addr = server_socket.accept()
                     debug_print(f"Conectado por {addr}")
                     thread = threading.Thread(target=self.handle_connection, args=(conn, addr))
@@ -201,8 +214,7 @@ class NMS_Server:
 
     def run(self):
         global debug
-        LOCAL_ADR = "10.0.5.10"
-        self.socket.bind((LOCAL_ADR, 5000))
+
         while True:
             print("Iniciando servidor NMS...")
             print("1 - Iniciar socket TCP")
@@ -214,14 +226,20 @@ class NMS_Server:
             if option == "0":
                 break
             elif option == "1":
-                threading.Thread(target=self.start_tcp_server).start()
+                if not self.tcp_started:
+                    threading.Thread(target=self.start_tcp_server).start()
+                else:
+                    print("Servidor TCP já está em execução.")
             elif option == "2":
-                threading.Thread(target=self.start_udp_server).start()
+                if not self.udp_started:
+                    threading.Thread(target=self.start_udp_server).start()
+                else:
+                    print("Servidor UDP já está em execução.")
             elif option == "3":
                 self.initialize_tasks()
             elif option == "4":
-                debug = True
-                print("Debug mode ativado.")
+                debug = not debug
+                print(f"Debug mode {'ativado' if debug else 'desativado'}.")
             else:
                 print("Opção inválida. Tente novamente.")
 
