@@ -36,8 +36,6 @@ class NMS_Server:
         if not self.tasks:
             print("Nenhuma tarefa carregada para distribuição.")
             return
-        
-
         tasks_for_device = self.tasks.get(address)
         agent_port = self.agents.get(address)[1]
         print(json.dumps(tasks_for_device, indent=4))
@@ -64,49 +62,6 @@ class NMS_Server:
             for device in devices:
                 thread = threading.Thread(target=self.monitoring_task, args=(task))
                 thread.start()
-
-                        
-    def monitoring_task(self,task):
-        devices = task.tasks[0]['devices']
-        for device in devices:
-            device_id = device.get('device_id')
-            device_metrics = device.get('device_metrics')
-            if device_metrics.get('cpu_usage') == True :
-                cpu_usage = device_metrics.get('cpu_usage')
-            if device_metrics.get('ram_usage') == True :
-                ram_usage = device_metrics.get('ram_usage')
-            link_metrics = device.get('link_metrics')
-            for metric in link_metrics:
-                bandwidth = metric.get('bandwidth')
-                latency = metric.get('latency')
-                jitter = metric.get('jitter')
-                packet_loss = metric.get('packet_loss')
-            alertflow_conditions = device.get('alertflow_conditions')
-            for condition in alertflow_conditions:
-                if ram_usage == True:
-                    ram_usage_threshold = condition.get('ram_usage_threshold')
-                if cpu_usage == True:
-                    cpu_usage_threshold = condition.get('cpu_usage_threshold')
-                jitter_threshold = condition.get('jitter_threshold')
-                bandwidth_threshold = condition.get('bandwidth_threshold')
-
-        current_metrics = json.loads(data.decode())
-
-        # Verifica se os thresholds foram ultrapassados
-        for condition in alertflow_conditions:
-            if ram_usage and current_metrics.get('ram_usage') > condition.get('ram_usage_threshold'):
-                print(f"Alerta: RAM usage no dispositivo {device_id} ultrapassou o threshold.")
-            if cpu_usage and current_metrics.get('cpu_usage') > condition.get('cpu_usage_threshold'):
-                print(f"Alerta: CPU usage no dispositivo {device_id} ultrapassou o threshold.")
-            for metric in link_metrics:
-                if current_metrics.get('bandwidth') > condition.get('bandwidth_threshold'):
-                    print(f"Alerta: Bandwidth no dispositivo {device_id} ultrapassou o threshold.")
-                if current_metrics.get('latency') > condition.get('latency_threshold'):
-                    print(f"Alerta: Latency no dispositivo {device_id} ultrapassou o threshold.")
-                if current_metrics.get('jitter') > condition.get('jitter_threshold'):
-                    print(f"Alerta: Jitter no dispositivo {device_id} ultrapassou o threshold.")
-                if current_metrics.get('packet_loss') > condition.get('packet_loss_threshold'):
-                    print(f"Alerta: Packet loss no dispositivo {device_id} ultrapassou o threshold.")
 
     def start_udp_server(self, devices_task_sent=[]):
         """Listens for incoming UDP connections. Must be threaded."""

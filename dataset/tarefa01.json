@@ -11,8 +11,10 @@
           "interface_stats": ["eth0", "eth1"]
         },
         "link_metrics": {
-          "bandwidth": {
-            "enabled": true,
+          "iperf": {
+            "bandwidth": true,
+            "jitter": false,
+            "packet_loss": true,
             "type": "iperf",
             "role": "client",
             "server_address": "10.0.4.10",
@@ -20,27 +22,9 @@
             "test_duration": 100,
             "frequency": 10
           },
-          "latency": {
-            "enabled": true,
+          "ping": {
+            "latency": true,
             "destination": "10.0.7.10"
-          },
-          "jitter": {
-            "enabled": false,
-            "server_address": "10.0.4.10",
-            "role" : "client",
-            "server_port": 5201,
-            "test_duration": 100,
-            "frequency": 10
-          },
-          "packet_loss": {
-            "enabled": true,
-            "type": "iperf",
-            "role": "client",
-            "server_address": "192.168.1.1",
-            "server_port": 5201,
-            "protocol": "udp",
-            "test_duration": 100,
-            "frequency": 10
           }
         },
         "alertflow_conditions": {

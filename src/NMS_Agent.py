@@ -1,8 +1,9 @@
-import socket, json, os, subprocess, re, psutil
+import socket, json, os, subprocess, re, psutil, time, threading
 from NetTask import UDP
 from AlertFlow import TCP
 
 debug = True
+performing_task = False
 
 def debug_print(message):
     if debug:
@@ -16,6 +17,7 @@ class NMS_Agent:
         self.udp_porta = udp_porta
         self.tcp_socket = None
         self.udp_socket = None
+        self.tasks = []
         self.metrics = {}
 
     # Obtém o endereço IP local do dispositivo (ID do NMS_Agent)
@@ -75,15 +77,15 @@ class NMS_Agent:
 
                 # Verificar se a tarefa é direcionada ao agente correto
                 if identificador == self.id:
-                    task_data = json.loads(dados)
+                    self.tasks = json.loads(dados)
                     # Enviar um ACK de confirmação ao servidor
                     ack_message = UDP(tipo=99, dados='', identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
                                         porta=self.udp_porta, socket=self.udp_socket)
                     print(f"[DEBUG - send_ack] Enviando ACK para {self.server_endereco}:{self.udp_porta}")
                     ack_message.send_ack()
                     # Processar a tarefa recebida
-                    print(f"[DEBUG - receive_task] Processando tarefa: {task_data}")
-                    self.process_task(task_data)
+                    print(f"[DEBUG - receive_task] Processando tarefas")
+                    self.process_task()
                 else:
                     print(f"[DEBUG - receive_task] Tarefa não direcionada para este agente. Ignorada.")
 
@@ -95,14 +97,69 @@ class NMS_Agent:
                 print(f"[ERRO - receive_task] Falha ao receber mensagem: {e}")
 
 
-    def process_task(self, task):
-        # Exemplo de operações:
-        pass
-        #metrics = task.get('device_metrics')
-        #link_metrics = task.get('link_metrics')
-        #alert_conditions = task.get('link_metrics').get('alertflow_conditions')
+    def process_task(self):
+        for task in self.tasks:
+            print(f"[DEBUG - process_task] Processando tarefa {task[0]}")
+            frequency = task[1].get('frequency')
+            device_metrics = task[1].get('device_metrics')
+            link_metrics = task[1].get('link_metrics')
+            alert_conditions = task[1].get('alertflow_conditions')
+            print({"aaaaaaaa"})
+            self.task_manager(device_metrics,link_metrics,alert_conditions, frequency)
+            print(f"[DEBUG - process_task] Tarefa {task[0]} processada com sucesso.")
 
-        # Chamar funções para monitoramento de métricas ou alertas
+    def task_manager(self,device_metrics,link_metrics,alert_conditions, frequency):
+        performing_task = True
+        if device_metrics.get('cpu_usage') == True :
+            cpu_usage = device_metrics.get('cpu_usage')
+        if device_metrics.get('ram_usage') == True :
+            ram_usage = device_metrics.get('ram_usage')
+        for command in link_metrics:
+            if command == 'iperf' :
+                bandwidth = command.get('bandwidth')
+                latency = command.get('latency')
+                jitter = command.get('jitter')
+            elif command == 'ping' :
+                packet_loss = command.get('packet_loss')
+        for condition in alert_conditions:
+            if ram_usage == 'true':
+                ram_usage_threshold = condition.get('ram_usage_threshold')
+            if cpu_usage == 'true':
+                cpu_usage_threshold = condition.get('cpu_usage_threshold')
+            jitter_threshold = condition.get('jitter_threshold')
+            bandwidth_threshold = condition.get('bandwidth_threshold')
+
+        threading.Thread(target=self.monitor_task, args=(frequency,alert_conditions, ram_usage, cpu_usage)).start()    
+        self.perform_network_tests(link_metrics)
+        performing_task = False
+        metrics_message = UDP(tipo=3, dados=self.metrics, identificador=self.id, endereco=self.server_endereco, porta=self.udp_porta, socket=self.udp_socket)
+        metrics_message.send_message()
+        self.metrics = {}
+        # Verifica se os thresholds foram ultrapassados
+
+    def monitor_task(self,frequency,alert_conditions, ram_usage, cpu_usage):
+        while performing_task:
+            time.sleep(frequency)
+            for condition in alert_conditions:
+                if ram_usage and psutil.virtual_memory() > condition.get('ram_usage_threshold'):
+                    message = f"Alerta: RAM usage ultrapassou o threshold."
+                    print(message)
+                    alert = TCP(tipo=2, dados=message, identificador=self.id, endereco=self.server_endereco, porta=self.tcp_porta, socket=self.tcp_socket)
+                    if alert.send_message():
+                        print("Alerta enviado com sucesso.")
+                    else:
+                        print("Erro ao enviar alerta.")
+                if cpu_usage and psutil.cpu_usage() > condition.get('cpu_usage_threshold'):
+                    print(f"Alerta: CPU usage ultrapassou o threshold.")
+                if self.metrics.get('bandwidth') > condition.get('bandwidth_threshold'):
+                    print(f"Alerta: Bandwidth no dispositivo ultrapassou o threshold.")
+                if self.metrics.get('latency') > condition.get('latency_threshold'):
+                    print(f"Alerta: Latency ultrapassou o threshold.")
+                if self.metrics.get('jitter') > condition.get('jitter_threshold'):
+                    print(f"Alerta: Jitter ultrapassou o threshold.")
+                if self.metrics.get('packet_loss') > condition.get('packet_loss_threshold'):
+                    print(f"Alerta: Packet loss ultrapassou o threshold.")
+
 
     def collect_metrics(self, device_id, metrics, link_metrics):
         print(f"[DEBUG - collect_metrics] Coletando métricas para o dispositivo {device_id}")
@@ -139,25 +196,26 @@ class NMS_Agent:
 
     def update_metric(self,metrics):
         for metric in metrics:
-            if self.metrics[metric]:
-                self.metrics[metric[0]] = tuple(self.metrics[metrics][0]+1,(self.metrics[metric][1]*self.metrics[metric][0] + metrics[metric][0])/self.metrics[metric][0]+1)
+            dict_metric = self.metrics[metric[0]]
+            if dict_metric:
+                dict_metric = tuple(self.metrics[metrics][0]+1,(self.metrics[metric][1]*self.metrics[metric][0] + metric[0])/self.metrics[metric][0]+1)
             else:
-                self.metrics[metric[0]] = (1,metrics[metric])
+                dict_metric = (1,metrics[metric])
+            
 
     # Função para realizar aplicar as tarefas
-    def perform_network_tests(self, device_id, link_metrics):
+    def perform_network_tests(self, link_metrics):
         # Example of using ping
         for metric in link_metrics:
             tool = link_metrics.get(metric).get('tool')
             print(f"[DEBUG - perform_network_tests] Metric: {metric}")
             print(f"[DEBUG - perform_network_tests] Tool: {tool}")
             if 'ping' in tool:
-                if device_id:
-                    duration = link_metrics.get(metric).get('duration')
-                    frequency = link_metrics.get(metric).get('frequency')   
-                    destination = link_metrics.get(metric).get('destination')
-                    response = os.system(f"ping -c {frequency} {destination}")
-                    print(f"[DEBUG - perform_network_tests] Ping response for {device_id}: {response}")
+                duration = link_metrics.get(metric).get('duration')
+                frequency = link_metrics.get(metric).get('frequency')   
+                destination = link_metrics.get(metric).get('destination')
+                response = os.system(f"ping -c {frequency} {destination}")
+                print(f"[DEBUG - perform_network_tests] Ping response : {response}")
 
             # Example of using iperf
             if 'iperf' in tool:
