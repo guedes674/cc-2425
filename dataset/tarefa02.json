@@ -15,11 +15,37 @@
             "bandwidth": true,
             "jitter": false,
             "packet_loss": true,
-            "type": "iperf",
             "role": "client",
             "server_address": "10.0.4.10",
-            "server_port": 5201,
-            "test_duration": 100,
+            "transport" : "udp",
+            "duration": 100,
+            "frequency": 10
+          }
+        },
+        "alertflow_conditions": {
+              "cpu_usage": 80,
+              "ram_usage": 90,
+              "interface_stats": 2000,
+              "packet_loss": 5,
+              "jitter": 100
+              }
+      },
+      {
+        "device_id": "10.0.4.10",
+        "device_metrics": {
+          "cpu_usage": false,
+          "ram_usage": true,
+          "interface_stats": ["eth0", "eth1"]
+        },
+        "link_metrics": {
+          "iperf": {
+            "bandwidth": true,
+            "jitter": false,
+            "packet_loss": true,
+            "type": "iperf",
+            "role": "server",
+            "transport" : "udp",
+            "duration": 100,
             "frequency": 10
           }
         },

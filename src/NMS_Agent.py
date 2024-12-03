@@ -1,4 +1,4 @@
-import socket, json, os, subprocess, re, psutil, time, threading
+import socket, json, os, subprocess, re, psutil, time, threading,sys
 from NetTask import UDP
 from AlertFlow import TCP
 
@@ -95,6 +95,9 @@ class NMS_Agent:
 
             except Exception as e:
                 print(f"[ERRO - receive_task] Falha ao receber mensagem: {e}")
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                print(exc_type, fname, exc_tb.tb_lineno)
 
 
     def process_task(self):
@@ -104,34 +107,66 @@ class NMS_Agent:
             device_metrics = task[1].get('device_metrics')
             link_metrics = task[1].get('link_metrics')
             alert_conditions = task[1].get('alertflow_conditions')
-            print({"aaaaaaaa"})
             self.task_manager(device_metrics,link_metrics,alert_conditions, frequency)
             print(f"[DEBUG - process_task] Tarefa {task[0]} processada com sucesso.")
 
     def task_manager(self,device_metrics,link_metrics,alert_conditions, frequency):
-        performing_task = True
-        if device_metrics.get('cpu_usage') == True :
-            cpu_usage = device_metrics.get('cpu_usage')
-        if device_metrics.get('ram_usage') == True :
-            ram_usage = device_metrics.get('ram_usage')
-        for command in link_metrics:
-            if command == 'iperf' :
-                bandwidth = command.get('bandwidth')
-                latency = command.get('latency')
-                jitter = command.get('jitter')
-            elif command == 'ping' :
-                packet_loss = command.get('packet_loss')
-        for condition in alert_conditions:
-            if ram_usage == 'true':
-                ram_usage_threshold = condition.get('ram_usage_threshold')
-            if cpu_usage == 'true':
-                cpu_usage_threshold = condition.get('cpu_usage_threshold')
-            jitter_threshold = condition.get('jitter_threshold')
-            bandwidth_threshold = condition.get('bandwidth_threshold')
-
-        threading.Thread(target=self.monitor_task, args=(frequency,alert_conditions, ram_usage, cpu_usage)).start()    
-        self.perform_network_tests(link_metrics)
-        performing_task = False
+        try :
+            cpu_usage = False
+            ram_usage = False
+            if device_metrics.get('cpu_usage') == True :
+                cpu_usage = device_metrics.get('cpu_usage')
+            if device_metrics.get('ram_usage') == True :
+                ram_usage = device_metrics.get('ram_usage')
+            for command in link_metrics:
+                debug_print(f"[DEBUG - task_manager] Executando comando {command}")
+                performing_task = True
+                if command == 'iperf' :
+                    bandwidth = link_metrics.get(command).get('bandwidth')
+                    packet_loss = link_metrics.get(command).get('packet_loss')
+                    jitter = link_metrics.get(command).get('jitter')
+                    if bandwidth or jitter or packet_loss:
+                        tool_settings = {
+                            'role' : link_metrics.get(command).get('role'),
+                            'server_address' : link_metrics.get(command).get('server_address') if link_metrics.get(command).get('role') == 'client' else None,
+                            'duration' : link_metrics.get(command).get('duration'),
+                            'frequency' : link_metrics.get(command).get('frequency'),
+                            'transport' : link_metrics.get(command).get('transport')
+                        }
+                    else :
+                        print("Nenhuma métrica a ser medida.")
+                elif command == 'ping' :
+                    latency = link_metrics.get(command).get('latency')
+                    print(f"[DEBUG - task_manager] Latency : {latency}")
+                    if latency:
+                        debug_print("[DEBUG - task_manager] Executando teste de latência...")
+                        command = 'ping'
+                        tool_settings = {
+                            'destination' : link_metrics.get(command).get('destination'),
+                            'frequency' : link_metrics.get(command).get('frequency'),
+                            'duration' : link_metrics.get(command).get('duration'),
+                        }
+                        #metrics = self.get_metrics('ping',output)
+                if ram_usage == 'true':
+                    ram_usage_threshold = alert_conditions.get('ram_usage_threshold')
+                if cpu_usage == 'true':
+                    cpu_usage_threshold = alert_conditions.get('cpu_usage_threshold')
+                if jitter == 'true':
+                    jitter_threshold = alert_conditions.get('jitter_threshold')
+                if bandwidth == 'true':
+                    bandwidth_threshold = alert_conditions.get('bandwidth_threshold')
+                #threading.Thread(target=self.monitor_task, args=(frequency,alert_conditions, ram_usage, cpu_usage)).start() 
+                output = self.perform_network_tests(command,tool_settings)
+                metrics = self.get_metrics(command,output)
+                self.update_metric(metrics)
+                print(json.dumps(self.metrics, indent=4))
+                #metrics = self.get_metrics('iperf',output)
+                performing_task = False
+        except Exception as e:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
+    
         metrics_message = UDP(tipo=3, dados=self.metrics, identificador=self.id, endereco=self.server_endereco, porta=self.udp_porta, socket=self.udp_socket)
         metrics_message.send_message()
         self.metrics = {}
@@ -160,122 +195,95 @@ class NMS_Agent:
                 if self.metrics.get('packet_loss') > condition.get('packet_loss_threshold'):
                     print(f"Alerta: Packet loss ultrapassou o threshold.")
 
-
-    def collect_metrics(self, device_id, metrics, link_metrics):
-        print(f"[DEBUG - collect_metrics] Coletando métricas para o dispositivo {device_id}")
-
-        if metrics:
-            print(f"[DEBUG - collect_metrics] Métricas do dispositivo: {metrics}")
-            # Processar métricas do dispositivo
-            for metric, value in metrics.items():
-                print(f"[DEBUG - collect_metrics] Métrica: {metric}, Valor: {value}")
-                # Adicione lógica para processar cada métrica
-
-        if link_metrics:
-            print(f"[DEBUG - collect_metrics] Métricas de link: {link_metrics}")
-            # Processar métricas de link
-            for link, link_value in link_metrics.items():
-                print(f"[DEBUG - collect_metrics] Link: {link}, Valor: {link_value}")
-                # Adicione lógica para processar cada métrica de link
-
-        # Adicione lógica para armazenar ou enviar as métricas coletadas
-        print(f"[DEBUG - collect_metrics] Coleta de métricas concluída para o dispositivo {device_id}")
-
-    def check_alerts(self, device_id, alert_conditions):
-        print(f"[DEBUG - check_alerts] Verificando alertas para o dispositivo {device_id}")
-
-        if alert_conditions:
-            print(f"[DEBUG - check_alerts] Condições de alerta: {alert_conditions}")
-            # Processar condições de alerta
-            for alert, condition in alert_conditions.items():
-                print(f"[DEBUG - check_alerts] Alerta: {alert}, Condição: {condition}")
-                # Adicione lógica para verificar cada condição de alerta
-
-        # Adicione lógica para enviar alertas ou notificações
-        print(f"[DEBUG - check_alerts] Verificação de alertas concluída para o dispositivo {device_id}")
-
     def update_metric(self,metrics):
         for metric in metrics:
-            dict_metric = self.metrics[metric[0]]
+            dict_metric = self.metrics.get(metric[0])
             if dict_metric:
-                dict_metric = tuple(self.metrics[metrics][0]+1,(self.metrics[metric][1]*self.metrics[metric][0] + metric[0])/self.metrics[metric][0]+1)
+                dict_metric = tuple(dict_metric[0]+1,(dict_metric[1]*dict_metric[0] + metric[1])/dict_metric[0]+1)
             else:
-                dict_metric = (1,metrics[metric])
+                self.metrics[metric[0]]=(1,metric[1])
             
 
     # Função para realizar aplicar as tarefas
-    def perform_network_tests(self, link_metrics):
+    def perform_network_tests(self, tool, tool_settings):
         # Example of using ping
-        for metric in link_metrics:
-            tool = link_metrics.get(metric).get('tool')
-            print(f"[DEBUG - perform_network_tests] Metric: {metric}")
-            print(f"[DEBUG - perform_network_tests] Tool: {tool}")
-            if 'ping' in tool:
-                duration = link_metrics.get(metric).get('duration')
-                frequency = link_metrics.get(metric).get('frequency')   
-                destination = link_metrics.get(metric).get('destination')
-                response = os.system(f"ping -c {frequency} {destination}")
-                print(f"[DEBUG - perform_network_tests] Ping response : {response}")
+        print(f"[DEBUG - perform_network_tests] Tool: {tool}")
+        if 'ping' in tool:
+            duration = tool_settings.get('duration')
+            frequency = tool_settings.get('frequency')
+            destination = tool_settings.get('destination')
+            response = os.system(f"ping -c {frequency} {destination}")
+            print(f"[DEBUG - perform_network_tests] Ping response : {response}")
 
-            # Example of using iperf
-            if 'iperf' in tool:
-                duration = link_metrics.get(metric).get('duration')
-                mode = link_metrics.get(metric).get('mode')
-                transport = link_metrics.get(metric).get('transport')
-                server = link_metrics.get(metric).get('server_address')
-                comand = ["iperf"]
-                if mode == "client":
-                    comand.append("-c")
-                    comand.append(server)
-                    if transport == "udp":
-                        comand.append("-u")
-                    comand.append("-b")
-                    comand.append(f"{duration*100}M")
-                else:
-                    comand.append("-s")
-                    if transport == "udp":
-                        comand.append("-u")
-                    comand.append("-1")
-
-                #response = os.system(f"iperf {'-c' if mode == 'client' else '-s'} {server if mode =='client' else ''} {'-u' if transport == 'udp' else ''} -b {duration*100}M")
-                try :
-                    response = subprocess.run(comand, stdout=subprocess.PIPE,text=True)
-                    response.wait(timeout = 20)
-                except subprocess.TimeoutExpired:
-                    print(f"[DEBUG - perform_network_tests] Iperf test timed out.")
-                    response.terminate()
-                print(f"[DEBUG - perform_network_tests] Iperf response for {device_id}: {response.stdout}")
+        # Example of using iperf
+        if 'iperf' in tool:
+            duration = tool_settings.get('duration')
+            role = tool_settings.get('role')
+            transport = tool_settings.get('transport')
+            comand = ["iperf"]
+            if role == "client":
+                comand.append("-c")
+                server = tool_settings.get('server_address')
+                comand.append(server)
+                if transport == "udp":
+                    comand.append("-u")
+                comand.append("-b")
+                comand.append(f"{duration*100}M")
+            else:
+                comand.append("-s")
+                if transport == "udp":
+                    comand.append("-u")
+                comand.append("-1")
+            try:
+                response = subprocess.run(comand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=40)
+                if "Connection refused" in response.stderr:
+                    print(f"[DEBUG - perform_network_tests] Connection refused: {response.stderr}")
+                    return None
+                print(f"[DEBUG - perform_network_tests] Iperf response: {response.stdout}")
+                return response.stdout
+            except subprocess.TimeoutExpired:
+                print(f"[DEBUG - perform_network_tests] Iperf test timed out.")
+                return None
+            except Exception as e:
+                print(f"[DEBUG - perform_network_tests] Error: {e}")
+                return None
 
     def get_metrics(self, command, stdout):
-        # caso de ping
         metrics = []
+        
         if command == 'ping':
             # Parse ping output
-            packet_loss = re.search(r'(\d+)% packet loss', stdout).group(1)
-            tuple = ('packet_loss',packet_loss)
-            metrics.append(tuple)
-            avg_time = re.search(r'avg = ([\d.]+)', stdout).group(1)
-            metrics.append(tuple)
-            debug_print(f"Packet Loss: {packet_loss}%, Average Time: {avg_time} ms")
-            tuple = ('packet_loss',packet_loss)
-            metrics.append(tuple)
+            packet_loss_match = re.search(r'(\d+)% packet loss', stdout)
+            if packet_loss_match:
+                packet_loss = packet_loss_match.group(1)
+                metrics.append(('packet_loss', packet_loss))
             
-        # caso de iperf
+            avg_time_match = re.search(r'avg = ([\d.]+)', stdout)
+            if avg_time_match:
+                avg_time = avg_time_match.group(1)
+                metrics.append(('avg_time', avg_time))
+            
+            debug_print(f"Packet Loss: {packet_loss}%, Average Time: {avg_time} ms")
+        
         elif command == 'iperf':
             # Parse iperf output
-            bandwidth = re.search(r'(\d+ Mbits/sec)', stdout).group(1)
-            tuple = ('bandwidth',bandwidth)
-            metrics.append(tuple)
-            debug_print(f"Bandwidth: {bandwidth}")
+            bandwidth_match = re.search(r'(\d+) Mbits/sec', stdout)
+            if bandwidth_match:
+                bandwidth = bandwidth_match.group(1)
+                metrics.append(('bandwidth', bandwidth))
+            
+            debug_print(f"Bandwidth: {bandwidth} Mbits/sec")
+        
         else:
             debug_print("Comando desconhecido")
+        
         cpu_usage = psutil.cpu_percent()
-        tuple = ('cpu_usage',cpu_usage)
-        metrics.append(tuple)
-    
+        metrics.append(('cpu_usage', cpu_usage))
+        
         ram_usage = psutil.virtual_memory().percent
-        tuple = ('ram_usage',ram_usage)
-        metrics.append(tuple)
+        metrics.append(('ram_usage', ram_usage))
+        
+        print(f"[DEBUG - get_metrics] Metrics : {metrics}")
         return metrics
 
     def run(self):
@@ -293,7 +301,7 @@ class NMS_Agent:
                 self.connect_to_TCP_server()
             elif option == "2":
                 self.connect_to_UDP_server()
-            elif option == "4":
+            elif option == "3":
                 debug = not debug
                 print(f"Debug mode {'ativado' if debug else 'desativado'}.")
             else:

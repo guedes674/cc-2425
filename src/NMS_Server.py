@@ -6,7 +6,7 @@ from Tarefa import Tarefa
 # Go to right folder 
 # cd ../../../ && cd home/Documents/cc-2425
 
-debug = True
+debug = False
 
 def debug_print(message):
     if debug:
@@ -28,8 +28,6 @@ class NMS_Server:
         json_files = glob.glob(os.path.join(self.config_path, '*.json'))
         tarefa = Tarefa(config_path=json_files)  # A instância de Tarefa já chama o load_file
         self.tasks = tarefa.dict
-        debug_print(f"Tarefas carregadas:")
-        debug_print(json.dumps(self.tasks, indent=4))
 
     # Distribui as tarefas para os NMS_Agents via UDP
     def distribute_tasks(self,address):
