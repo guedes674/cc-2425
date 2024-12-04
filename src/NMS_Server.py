@@ -18,6 +18,7 @@ class NMS_Server:
         self.agents = {}  # Dicionário onde cada chave é o device_id e o valor é o endereço IP/porta do agente
         self.tasks = {}  # Dicionário onde cada chave é o device_id e o valor é a lista de tarefas a serem executadas
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.udp_socket.settimeout(None)
         self.udp_started = False
         self.tcp_started = False
         self.tcp_threads = []
@@ -36,7 +37,6 @@ class NMS_Server:
             return
         tasks_for_device = self.tasks.get(address)
         agent_port = self.agents.get(address)[1]
-        print(json.dumps(tasks_for_device, indent=4))
         agent_ip = self.agents.get(address)[0]
         serialized_task = json.dumps(tasks_for_device, separators=(',', ':')).encode('utf-8')
         task_message = UDP(2, serialized_task, identificador=address, sequencia=1, endereco=agent_ip, porta=agent_port, socket = self.udp_socket)
@@ -97,7 +97,7 @@ class NMS_Server:
                         #self.initialize_tasks(devices_task_sent)
                     except socket.timeout:
                         print("Tempo limite do socket atingido. Continuando...")
-                        continue
+                        pass
                 
         except struct.error as e:
             print("Erro ao desserializar a mensagem:", e)

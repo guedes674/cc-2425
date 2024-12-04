@@ -2,6 +2,12 @@ import socket
 import struct 
 import time
 
+debug = False
+
+def debug_print(message):
+    if debug:
+        print(message)
+
 class UDP:
     def __init__(self, tipo, dados, identificador=None, sequencia=None, endereco=None, porta=None, socket=None):
         self.tipo = tipo                         # Tipo de mensagem (por exemplo, 'register', 'colect', 'alert')
@@ -53,15 +59,11 @@ class UDP:
     def send_message(self, max_retries=3, timeout=2, delay=0.5):
         # Verifique se os valores estão corretos
         if self.endereco is None or self.porta is None:
-            print(f"[ERRO - send_message] Endereço ou porta não configurados corretamente: {self.endereco}, {self.porta}")
+            debug_print(f"[ERRO - send_message] Endereço ou porta não configurados corretamente: {self.endereco}, {self.porta}")
             return False
 
-        # Usa o socket existente, configurando o timeout uma vez
-        if not self.socket.gettimeout():
-            self.socket.settimeout(timeout)
-        
         mensagem_binaria = self.serialize()
-        print(f"[DEBUG - send_message] Enviando mensagem para {self.endereco}:{self.porta} - Tipo: {self.tipo}, Sequência: {self.sequencia}")
+        debug_print(f"[DEBUG - send_message] Enviando mensagem para {self.endereco}:{self.porta} - Tipo: {self.tipo}, Sequência: {self.sequencia}")
 
         if self.tipo == 99:  # Envio de ACK sem esperar
             self.socket.sendto(mensagem_binaria, (self.endereco, self.porta))
@@ -73,21 +75,20 @@ class UDP:
         ack_recebido = False
         while tentativas < max_retries and not ack_recebido:
             self.socket.sendto(mensagem_binaria, (self.endereco, self.porta))
-            print(f"[DEBUG - send_message] Mensagem enviada, aguardando ACK (tentativa {tentativas + 1})")
-            print(self.socket)
+            debug_print(f"[DEBUG - send_message] Mensagem enviada, aguardando ACK (tentativa {tentativas + 1})")
             try:
                 ack_mensagem, _ = self.socket.recvfrom(1024)
                 ack_sequencia, ack_identificador, _ = UDP.desserialize(ack_mensagem)
                 if ack_sequencia == self.sequencia and ack_identificador == self.identificador:
                     ack_recebido = True
-                    print("[DEBUG - send_message] ACK válido recebido")
+                    debug_print("[DEBUG - send_message] ACK válido recebido")
             except socket.timeout:
-                print("[ERRO - send_message] Timeout ao aguardar ACK")
+                debug_print("[ERRO - send_message] Timeout ao aguardar ACK")
                 tentativas += 1
                 time.sleep(delay * (2 ** tentativas))
 
         if not ack_recebido:
-            print("[ERRO - send_message] Falha ao receber ACK após várias tentativas")
+            debug_print("[ERRO - send_message] Falha ao receber ACK após várias tentativas")
 
         return ack_recebido
 

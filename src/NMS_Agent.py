@@ -62,18 +62,18 @@ class NMS_Agent:
         
     # No método receive_task do agente
     def receive_task(self):
-        print("[DEBUG - receive_task] Aguardando tarefas do NMS_Server...")
+        debug_print("[DEBUG - receive_task] Aguardando tarefas do NMS_Server...")
         while True:
             try:
                 # Recebe a mensagem e o endereço de onde ela foi enviada
                 data, addr = self.udp_socket.recvfrom(4096)
-                print(f"[DEBUG - receive_task] Mensagem recebida de {addr[0]} na porta {addr[1]}")  # addr[0] -> IP, addr[1] -> Porta
+                debug_print(f"[DEBUG - receive_task] Mensagem recebida de {addr[0]} na porta {addr[1]}")  # addr[0] -> IP, addr[1] -> Porta
 
                 # Desserializar a mensagem recebida para extrair a sequência, identificador e dados
                 sequencia, identificador, dados = UDP.desserialize(data)
                 print(dados)
-                print(f"[DEBUG - receive_task] Tipo de dados recebidos: {type(dados)}")
-                print(f"[DEBUG - receive_task] Sequência: {sequencia}, Identificador: {identificador}")
+                debug_print(f"[DEBUG - receive_task] Tipo de dados recebidos: {type(dados)}")
+                debug_print(f"[DEBUG - receive_task] Sequência: {sequencia}, Identificador: {identificador}")
 
                 # Verificar se a tarefa é direcionada ao agente correto
                 if identificador == self.id:
@@ -81,16 +81,16 @@ class NMS_Agent:
                     # Enviar um ACK de confirmação ao servidor
                     ack_message = UDP(tipo=99, dados='', identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
                                         porta=self.udp_porta, socket=self.udp_socket)
-                    print(f"[DEBUG - send_ack] Enviando ACK para {self.server_endereco}:{self.udp_porta}")
+                    debug_print(f"[DEBUG - send_ack] Enviando ACK para {self.server_endereco}:{self.udp_porta}")
                     ack_message.send_ack()
                     # Processar a tarefa recebida
-                    print(f"[DEBUG - receive_task] Processando tarefas")
+                    debug_print(f"[DEBUG - receive_task] Processando tarefas")
                     self.process_task()
                 else:
-                    print(f"[DEBUG - receive_task] Tarefa não direcionada para este agente. Ignorada.")
+                    debug_print(f"[DEBUG - receive_task] Tarefa não direcionada para este agente. Ignorada.")
 
             except socket.timeout:
-                print("[DEBUG - receive_task] Tempo esgotado. Nenhuma mensagem recebida.")
+                debug_print("[DEBUG - receive_task] Tempo esgotado. Nenhuma mensagem recebida.")
                 continue  # Volta para aguardar a próxima mensagem
 
             except Exception as e:
@@ -102,73 +102,69 @@ class NMS_Agent:
 
     def process_task(self):
         for task in self.tasks:
-            print(f"[DEBUG - process_task] Processando tarefa {task[0]}")
+            debug_print(f"[DEBUG - process_task] Processando tarefa {task[0]}")
             frequency = task[1].get('frequency')
             device_metrics = task[1].get('device_metrics')
             link_metrics = task[1].get('link_metrics')
             alert_conditions = task[1].get('alertflow_conditions')
             self.task_manager(device_metrics,link_metrics,alert_conditions, frequency)
-            print(f"[DEBUG - process_task] Tarefa {task[0]} processada com sucesso.")
+            debug_print(f"[DEBUG - process_task] Tarefa {task[0]} processada com sucesso.")
 
     def task_manager(self,device_metrics,link_metrics,alert_conditions, frequency):
-        try :
-            cpu_usage = False
-            ram_usage = False
-            if device_metrics.get('cpu_usage') == True :
-                cpu_usage = device_metrics.get('cpu_usage')
-            if device_metrics.get('ram_usage') == True :
-                ram_usage = device_metrics.get('ram_usage')
-            for command in link_metrics:
-                debug_print(f"[DEBUG - task_manager] Executando comando {command}")
-                performing_task = True
-                if command == 'iperf' :
-                    bandwidth = link_metrics.get(command).get('bandwidth')
-                    packet_loss = link_metrics.get(command).get('packet_loss')
-                    jitter = link_metrics.get(command).get('jitter')
-                    if bandwidth or jitter or packet_loss:
-                        tool_settings = {
-                            'role' : link_metrics.get(command).get('role'),
-                            'server_address' : link_metrics.get(command).get('server_address') if link_metrics.get(command).get('role') == 'client' else None,
-                            'duration' : link_metrics.get(command).get('duration'),
-                            'frequency' : link_metrics.get(command).get('frequency'),
-                            'transport' : link_metrics.get(command).get('transport')
-                        }
-                    else :
-                        print("Nenhuma métrica a ser medida.")
-                elif command == 'ping' :
-                    latency = link_metrics.get(command).get('latency')
-                    print(f"[DEBUG - task_manager] Latency : {latency}")
-                    if latency:
-                        debug_print("[DEBUG - task_manager] Executando teste de latência...")
-                        command = 'ping'
-                        tool_settings = {
-                            'destination' : link_metrics.get(command).get('destination'),
-                            'frequency' : link_metrics.get(command).get('frequency'),
-                            'duration' : link_metrics.get(command).get('duration'),
-                        }
-                        #metrics = self.get_metrics('ping',output)
-                if ram_usage == 'true':
-                    ram_usage_threshold = alert_conditions.get('ram_usage_threshold')
-                if cpu_usage == 'true':
-                    cpu_usage_threshold = alert_conditions.get('cpu_usage_threshold')
-                if jitter == 'true':
-                    jitter_threshold = alert_conditions.get('jitter_threshold')
-                if bandwidth == 'true':
-                    bandwidth_threshold = alert_conditions.get('bandwidth_threshold')
-                #threading.Thread(target=self.monitor_task, args=(frequency,alert_conditions, ram_usage, cpu_usage)).start() 
-                output = self.perform_network_tests(command,tool_settings)
-                metrics = self.get_metrics(command,output)
-                self.update_metric(metrics)
-                print(json.dumps(self.metrics, indent=4))
-                #metrics = self.get_metrics('iperf',output)
-                performing_task = False
-        except Exception as e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            print(exc_type, fname, exc_tb.tb_lineno)
+        cpu_usage = False
+        ram_usage = False
+        if device_metrics.get('cpu_usage') == True :
+            cpu_usage = device_metrics.get('cpu_usage')
+        if device_metrics.get('ram_usage') == True :
+            ram_usage = device_metrics.get('ram_usage')
+        print(json.dumps(link_metrics, indent=4))
+        for command in link_metrics:
+            debug_print(f"[DEBUG - task_manager] Executando comando {command}")
+            performing_task = True
+            if command == 'iperf' :
+                bandwidth = link_metrics.get(command).get('bandwidth')
+                packet_loss = link_metrics.get(command).get('packet_loss')
+                jitter = link_metrics.get(command).get('jitter')
+                if bandwidth or jitter or packet_loss:
+                    tool_settings = {
+                        'role' : link_metrics.get(command).get('role'),
+                        'server_address' : link_metrics.get(command).get('server_address') if link_metrics.get(command).get('role') == 'client' else None,
+                        'duration' : link_metrics.get(command).get('duration'),
+                        'frequency' : link_metrics.get(command).get('frequency'),
+                        'transport' : link_metrics.get(command).get('transport')
+                    }
+                else :
+                    print("Nenhuma métrica a ser medida.")
+            elif command == 'ping' :
+                latency = link_metrics.get(command).get('latency')
+                if latency:
+                    debug_print("[DEBUG - task_manager] Executando teste de latência...")
+                    command = 'ping'
+                    tool_settings = {
+                        'destination' : link_metrics.get(command).get('destination'),
+                        'frequency' : link_metrics.get(command).get('frequency'),
+                        'duration' : link_metrics.get(command).get('duration'),
+                    }
+                    #metrics = self.get_metrics('ping',output)
+            if ram_usage == 'true':
+                ram_usage_threshold = alert_conditions.get('ram_usage_threshold')
+            if cpu_usage == 'true':
+                cpu_usage_threshold = alert_conditions.get('cpu_usage_threshold')
+            if jitter == 'true':
+                jitter_threshold = alert_conditions.get('jitter_threshold')
+            if bandwidth == 'true':
+                bandwidth_threshold = alert_conditions.get('bandwidth_threshold')
+            #threading.Thread(target=self.monitor_task, args=(frequency,alert_conditions, ram_usage, cpu_usage)).start() 
+            output = self.perform_network_tests(command,tool_settings)
+            metrics = self.get_metrics(command,output)
+            self.update_metric(metrics)
+            debug_print(f"[DEBUG - task_manager] Métricas atualizadas: {metrics}")
+            print(json.dumps(self.metrics, indent=4))
+            #metrics = self.get_metrics('iperf',output)
+            performing_task = False
     
-        metrics_message = UDP(tipo=3, dados=self.metrics, identificador=self.id, endereco=self.server_endereco, porta=self.udp_porta, socket=self.udp_socket)
-        metrics_message.send_message()
+        #metrics_message = UDP(tipo=3, dados=self.metrics, identificador=self.id, endereco=self.server_endereco, porta=self.udp_porta, socket=self.udp_socket)
+        #metrics_message.send_message()
         self.metrics = {}
         # Verifica se os thresholds foram ultrapassados
 
@@ -199,21 +195,35 @@ class NMS_Agent:
         for metric in metrics:
             dict_metric = self.metrics.get(metric[0])
             if dict_metric:
-                dict_metric = tuple(dict_metric[0]+1,(dict_metric[1]*dict_metric[0] + metric[1])/dict_metric[0]+1)
+                count = dict_metric[0] + 1
+                avg = (dict_metric[1]*dict_metric[0] + metric[1])/count
+                self.metrics[metric[0]] = (count, avg)
             else:
                 self.metrics[metric[0]]=(1,metric[1])
-            
 
     # Função para realizar aplicar as tarefas
     def perform_network_tests(self, tool, tool_settings):
         # Example of using ping
-        print(f"[DEBUG - perform_network_tests] Tool: {tool}")
+        debug_print(f"[DEBUG - perform_network_tests] Tool: {tool}")
         if 'ping' in tool:
+            comand = ["ping"]
             duration = tool_settings.get('duration')
-            frequency = tool_settings.get('frequency')
-            destination = tool_settings.get('destination')
-            response = os.system(f"ping -c {frequency} {destination}")
-            print(f"[DEBUG - perform_network_tests] Ping response : {response}")
+            comand.append("-c")
+            comand.append(str(duration))
+            comand.append(tool_settings.get('destination'))
+
+            try:
+                response = subprocess.run(comand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=40)
+                if "Connection refused" in response.stderr:
+                    debug_print(f"[DEBUG - perform_network_tests] Connection refused: {response.stderr}")
+                    return None
+                debug_print(f"[DEBUG - perform_network_tests] Ping response: {response.stdout}")
+                return response.stdout
+            except subprocess.TimeoutExpired:
+                debug_print(f"[DEBUG - perform_network_tests] Ping test timed out.")
+            except Exception as e:
+                debug_print(f"[DEBUG - perform_network_tests] Error: {e}")
+            
 
         # Example of using iperf
         if 'iperf' in tool:
@@ -237,16 +247,17 @@ class NMS_Agent:
             try:
                 response = subprocess.run(comand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=40)
                 if "Connection refused" in response.stderr:
-                    print(f"[DEBUG - perform_network_tests] Connection refused: {response.stderr}")
+                    debug_print(f"[DEBUG - perform_network_tests] Connection refused: {response.stderr}")
                     return None
-                print(f"[DEBUG - perform_network_tests] Iperf response: {response.stdout}")
+                debug_print(f"[DEBUG - perform_network_tests] Iperf response: {response.stdout}")
                 return response.stdout
             except subprocess.TimeoutExpired:
-                print(f"[DEBUG - perform_network_tests] Iperf test timed out.")
-                return None
+                debug_print(f"[DEBUG - perform_network_tests] Iperf test timed out.")
+                return response.stdout
             except Exception as e:
-                print(f"[DEBUG - perform_network_tests] Error: {e}")
+                debug_print(f"[DEBUG - perform_network_tests] Error: {e}")
                 return None
+            
 
     def get_metrics(self, command, stdout):
         metrics = []
@@ -263,7 +274,7 @@ class NMS_Agent:
                 avg_time = avg_time_match.group(1)
                 metrics.append(('avg_time', avg_time))
             
-            debug_print(f"Packet Loss: {packet_loss}%, Average Time: {avg_time} ms")
+                debug_print(f"Packet Loss: {packet_loss}%, Average Time: {avg_time} ms")
         
         elif command == 'iperf':
             # Parse iperf output
