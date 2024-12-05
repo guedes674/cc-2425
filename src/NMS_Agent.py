@@ -72,7 +72,6 @@ class NMS_Agent:
                 # Desserializar a mensagem recebida para extrair a sequência, identificador e dados
                 sequencia, identificador, dados = UDP.desserialize(data)
                 print(dados)
-                debug_print(f"[DEBUG - receive_task] Tipo de dados recebidos: {type(dados)}")
                 debug_print(f"[DEBUG - receive_task] Sequência: {sequencia}, Identificador: {identificador}")
 
                 # Verificar se a tarefa é direcionada ao agente correto

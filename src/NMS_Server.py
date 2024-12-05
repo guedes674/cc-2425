@@ -31,15 +31,22 @@ class NMS_Server:
             path = self.config_path
         json_files = glob.glob(os.path.join(path, '*.json'))
         tarefa = Tarefa(config_path=json_files,tasks_loaded= self.tasks_loaded)  # A instância de Tarefa já chama o load_file
-        for device in tarefa.dict:
+        tdict = tarefa.dict
+        for device in tdict:
             if device in self.agents:
                 print(f"O dispositivo {device} já está registrado no servidor, enviando tarefa.")
-                self.tasks[device] = tarefa.dict.get(device)
+                if self.tasks[device]:
+                    self.tasks[device] = tdict.get(device) + self.tasks[device]
+                else :
+                    self.tasks[device] = tdict.get(device)
+                print(f"Tasks loaded from extra file to be sent : {self.tasks[device]}")
+                print(f"Tarefas para o dispositivo {device}: {self.tasks[device]}")
                 self.distribute_tasks(device)
+                print(f"Tarefas distribuídas para o dispositivo {device}.")
         if not self.tasks:
-            self.tasks = tarefa.dict
+            self.tasks = tdict
         else :
-            self.tasks.update(tarefa.dict)
+            self.tasks.update(tdict)
         for task in tarefa.tasks:
             self.tasks_loaded[task] = True
 
@@ -55,6 +62,8 @@ class NMS_Server:
             print(f"Erro ao remover a tarefa para o dispositivo {address}")
         agent_port = self.agents.get(address)[1]
         agent_ip = self.agents.get(address)[0]
+        print(self.tasks)
+        print(json.dumps(tasks_for_device,indent=4))
         serialized_task = json.dumps(tasks_for_device, separators=(',', ':')).encode('utf-8')
         task_message = UDP(2, serialized_task, identificador=address, sequencia=1, endereco=agent_ip, porta=agent_port, socket = self.udp_socket)
         debug_print(f"[DEBUG - Servidor] Distribuindo tarefas para o dispositivo {address}")
