@@ -110,6 +110,11 @@ class NMS_Agent:
             self.task_manager(device_metrics,link_metrics,alert_conditions, frequency)
             debug_print(f"[DEBUG - process_task] Tarefa {task[0]} processada com sucesso.")
 
+        self.tasks = []
+        print("Todas as tarefas foram processadas com sucesso.")
+        print("Tentando adequirir novas tarefas...")
+        self.receive_task()
+
     def task_manager(self,device_metrics,link_metrics,alert_conditions, frequency):
         cpu_usage = False
         ram_usage = False
@@ -125,6 +130,10 @@ class NMS_Agent:
                 bandwidth = link_metrics.get(command).get('bandwidth')
                 packet_loss = link_metrics.get(command).get('packet_loss')
                 jitter = link_metrics.get(command).get('jitter')
+                if jitter == 'true':
+                    jitter_threshold = alert_conditions.get('jitter_threshold')
+                if bandwidth == 'true':
+                    bandwidth_threshold = alert_conditions.get('bandwidth_threshold')
                 if bandwidth or jitter or packet_loss:
                     tool_settings = {
                         'role' : link_metrics.get(command).get('role'),
@@ -150,10 +159,8 @@ class NMS_Agent:
                 ram_usage_threshold = alert_conditions.get('ram_usage_threshold')
             if cpu_usage == 'true':
                 cpu_usage_threshold = alert_conditions.get('cpu_usage_threshold')
-            if jitter == 'true':
-                jitter_threshold = alert_conditions.get('jitter_threshold')
-            if bandwidth == 'true':
-                bandwidth_threshold = alert_conditions.get('bandwidth_threshold')
+            
+            
             #threading.Thread(target=self.monitor_task, args=(frequency,alert_conditions, ram_usage, cpu_usage)).start() 
             output = self.perform_network_tests(command,tool_settings)
             metrics = self.get_metrics(command,output)
@@ -227,6 +234,7 @@ class NMS_Agent:
 
         # Example of using iperf
         if 'iperf' in tool:
+            response = None
             duration = tool_settings.get('duration')
             role = tool_settings.get('role')
             transport = tool_settings.get('transport')
@@ -243,8 +251,9 @@ class NMS_Agent:
                 comand.append("-s")
                 if transport == "udp":
                     comand.append("-u")
+                comand.append("-P")
                 comand.append("-1")
-            try:
+            try:    
                 response = subprocess.run(comand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=40)
                 if "Connection refused" in response.stderr:
                     debug_print(f"[DEBUG - perform_network_tests] Connection refused: {response.stderr}")
@@ -253,7 +262,7 @@ class NMS_Agent:
                 return response.stdout
             except subprocess.TimeoutExpired:
                 debug_print(f"[DEBUG - perform_network_tests] Iperf test timed out.")
-                return response.stdout
+                return None
             except Exception as e:
                 debug_print(f"[DEBUG - perform_network_tests] Error: {e}")
                 return None
@@ -283,7 +292,7 @@ class NMS_Agent:
                 bandwidth = bandwidth_match.group(1)
                 metrics.append(('bandwidth', bandwidth))
             
-            debug_print(f"Bandwidth: {bandwidth} Mbits/sec")
+                debug_print(f"Bandwidth: {bandwidth} Mbits/sec")
         
         else:
             debug_print("Comando desconhecido")

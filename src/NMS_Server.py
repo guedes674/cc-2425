@@ -1,4 +1,4 @@
-import socket, os, glob, json, struct, threading, re
+import socket, os, glob, json, struct, threading, re,sys
 from AlertFlow import TCP
 from NetTask import UDP
 from Tarefa import Tarefa
@@ -17,6 +17,7 @@ class NMS_Server:
         self.config_path = config_path
         self.agents = {}  # Dicionário onde cada chave é o device_id e o valor é o endereço IP/porta do agente
         self.tasks = {}  # Dicionário onde cada chave é o device_id e o valor é a lista de tarefas a serem executadas
+        self.tasks_loaded = {}  # Dicionário onde cada chave é o task_id e o valor é um booleano indicando se a tarefa foi concluída
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.settimeout(None)
         self.udp_started = False
@@ -25,10 +26,22 @@ class NMS_Server:
         self.load_tasks_from_json()
 
     # Lê todos os arquivos JSON na pasta de configurações
-    def load_tasks_from_json(self):
-        json_files = glob.glob(os.path.join(self.config_path, '*.json'))
-        tarefa = Tarefa(config_path=json_files)  # A instância de Tarefa já chama o load_file
-        self.tasks = tarefa.dict
+    def load_tasks_from_json(self,path = None):
+        if not path:
+            path = self.config_path
+        json_files = glob.glob(os.path.join(path, '*.json'))
+        tarefa = Tarefa(config_path=json_files,tasks_loaded= self.tasks_loaded)  # A instância de Tarefa já chama o load_file
+        for device in tarefa.dict:
+            if device in self.agents:
+                print(f"O dispositivo {device} já está registrado no servidor, enviando tarefa.")
+                self.tasks[device] = tarefa.dict.get(device)
+                self.distribute_tasks(device)
+        if not self.tasks:
+            self.tasks = tarefa.dict
+        else :
+            self.tasks.update(tarefa.dict)
+        for task in tarefa.tasks:
+            self.tasks_loaded[task] = True
 
     # Distribui as tarefas para os NMS_Agents via UDP
     def distribute_tasks(self,address):
@@ -36,6 +49,10 @@ class NMS_Server:
             print("Nenhuma tarefa carregada para distribuição.")
             return
         tasks_for_device = self.tasks.get(address)
+        try:
+            del self.tasks[address]
+        except KeyError:
+            print(f"Erro ao remover a tarefa para o dispositivo {address}")
         agent_port = self.agents.get(address)[1]
         agent_ip = self.agents.get(address)[0]
         serialized_task = json.dumps(tasks_for_device, separators=(',', ':')).encode('utf-8')
@@ -84,7 +101,6 @@ class NMS_Server:
                         # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
                         sequencia, identificador, dados = UDP.desserialize(msg)
                         debug_print(f"[DEBUG - dados udp] Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados}")
-                        
                         # Criando o ACK como uma instância UDP
                         ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=client_address[0], 
                                             porta=client_address[1], socket=server_socket)
@@ -140,26 +156,31 @@ class NMS_Server:
             print("Iniciando servidor NMS...")
             print("1 - Iniciar socket TCP")
             print("2 - Iniciar socket UDP")
-            print("3 - Debug mode")
+            print("3 - Load new tasks")
+            print("4 - Debug mode")
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
                 break
             elif option == "1":
                 if not self.tcp_started:
-                    threading.Thread(target=self.start_tcp_server).start()
+                    threading.Thread(target=self.start_tcp_server,daemon=True).start()
                 else:
                     print("Servidor TCP já está em execução.")
             elif option == "2":
                 if not self.udp_started:
-                    threading.Thread(target=self.start_udp_server).start()
+                    threading.Thread(target=self.start_udp_server,daemon=True).start()
                 else:
                     print("Servidor UDP já está em execução.")
             elif option == "3":
+                path = input("Digite o caminho da pasta de tarefas: ")
+                self.load_tasks_from_json(path)
+            elif option == "4":
                 debug = not debug
                 print(f"Debug mode {'ativado' if debug else 'desativado'}.")
             else:
                 print("Opção inválida. Tente novamente.")
+        sys.exit()
 
 
 # Executando o servidor NMS

@@ -3,10 +3,11 @@ import time
 from AlertFlow import TCP
 
 class Tarefa:
-    def __init__(self, config_path):
+    def __init__(self, config_path,tasks_loaded):
         self.config_path = config_path
         self.tasks = []
         self.dict = {}
+        self.tasks_loaded = tasks_loaded
         self.load_files()
 
     # Carrega, interpreta e armazena as informações das tarefas e dispositivos
@@ -20,31 +21,36 @@ class Tarefa:
         with open(file, 'r') as file:
             config = json.load(file)
         # Caso onde "Task" é um dicionário único
+        
         task_data = config['task']
-        task_id = task_data['task_id']
-        frequency = task_data['frequency']
+        if task_data['task_id'] not in self.tasks_loaded:
+            task_id = task_data['task_id']
+            self.tasks.append(task_id)
+            frequency = task_data['frequency']
 
-        for device_data in task_data['devices']:
-            device_id = device_data['device_id']
-            device_metrics = device_data['device_metrics']
-            link_metrics = device_data['link_metrics']
-            alertflow_conditions = device_data['alertflow_conditions']
+            for device_data in task_data['devices']:
+                device_id = device_data['device_id']
+                device_metrics = device_data['device_metrics']
+                link_metrics = device_data['link_metrics']
+                alertflow_conditions = device_data['alertflow_conditions']
 
-            device = {
-                'frequency': frequency,
-                'device_metrics': device_metrics,
-                'link_metrics': link_metrics,
-                'alertflow_conditions': alertflow_conditions
-            }
+                device = {
+                    'frequency': frequency,
+                    'device_metrics': device_metrics,
+                    'link_metrics': link_metrics,
+                    'alertflow_conditions': alertflow_conditions
+                }
 
-            t = tuple((task_id, device))
-            device_list = self.dict.get(device_id)
-            if device_list:
-                self.dict[device_id].append(t)
-                self.dict[device_id] = sorted(self.dict[device_id], key=lambda x: x[0])
-            else :
-                tuplelist = [t]
-                self.dict[device_id] = tuplelist
+                t = tuple((task_id, device))
+                device_list = self.dict.get(device_id)
+                if device_list:
+                    self.dict[device_id].append(t)
+                    self.dict[device_id] = sorted(self.dict[device_id], key=lambda x: x[0])
+                else :
+                    tuplelist = [t]
+                    self.dict[device_id] = tuplelist
+        else : 
+            print(f"Tarefa {task_data['task_id']} já foi carregada anteriormente.")
 
     # Para cada tarefa, cria um processo de monitorização com a frequência definida
     def start_monitoring(self,tarefas):

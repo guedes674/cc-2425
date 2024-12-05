@@ -1,0 +1,32 @@
+{
+    "task": {
+      "task_id": "task-netflow-005",
+      "frequency": 20,
+      "devices": [
+        {
+          "device_id": "10.0.7.10",
+          "device_metrics": {
+            "cpu_usage": false,
+            "ram_usage": true,
+            "interface_stats": ["eth0", "eth1"]
+          },
+          "link_metrics": {
+            "ping": {
+              "latency": true,
+              "destination": "10.0.7.10",
+              "frequency": 10,
+              "duration": 20
+            }
+          },
+          "alertflow_conditions": {
+                "cpu_usage": 80,
+                "ram_usage": 90,
+                "interface_stats": 2000,
+                "packet_loss": 5,
+                "jitter": 100
+                }
+        }
+      ]
+    }
+  }
+  
