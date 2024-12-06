@@ -97,7 +97,7 @@ class NMS_Server:
                         agent_address = self.agents.get(device)
                         if agent_address:
                             # Send an ACK to the agent
-                            ack_message = UDP(tipo=99, dados="", identificador=agent_address, sequencia=0, endereco=agent_address[0], 
+                            ack_message = UDP(tipo=99, dados="", identificador=agent_address[0], sequencia=99, endereco=agent_address[0],
                                                 porta=agent_address[1], socket=server_socket)
                             ack_message.send_ack()
 
@@ -142,14 +142,16 @@ class NMS_Server:
                             sequencia, identificador, dados = UDP.desserialize(msg)
                             debug_print(f"[DEBUG - dados udp] Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados}")
                             # Criando o ACK como uma instância UDP
-                            ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=client_address[0], 
+                            ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=99, endereco=client_address[0], 
                                                 porta=client_address[1], socket=server_socket)
                             ack_message.send_ack()
 
                             # Guardar ip do agente que acabou de se ligar
                             self.agents[identificador] = (client_address[0], client_address[1])
+                            print(f"Agentes registrados no servidor: {self.agents}")
                             debug_print(f"[DEBUG - agentes] Agentes registrados no servidor: {self.agents}")
-                            print(f"tasks {self.tasks[client_address[0]]}")
+                            print(client_address[0])
+                            print(self.tasks)
                             self.distribute_tasks(client_address[0],self.tasks[client_address[0]])
                             #self.initialize_tasks(devices_task_sent)
                         except socket.timeout:

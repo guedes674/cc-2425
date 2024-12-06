@@ -41,7 +41,7 @@ class NMS_Agent:
             tipo=99, 
             dados="", 
             identificador=self.id, 
-            sequencia=0, 
+            sequencia=99, 
             endereco=self.server_endereco, 
             porta=self.udp_porta, 
             socket=self.udp_socket
@@ -57,7 +57,7 @@ class NMS_Agent:
 
                 # Deserialize the received message
                 sequencia, identificador, dados = UDP.desserialize(msg)
-                if identificador == self.id and sequencia == 0:
+                if identificador == self.id and sequencia == 99:
                     debug_print(f"ACK recebido do servidor {server_address}")
                     break
         except socket.timeout:
@@ -81,7 +81,7 @@ class NMS_Agent:
                     tipo=99, 
                     dados="", 
                     identificador=self.id, 
-                    sequencia=0, 
+                    sequencia=99, 
                     endereco=self.server_endereco, 
                     porta=self.udp_porta, 
                     socket=self.udp_socket
@@ -117,7 +117,7 @@ class NMS_Agent:
 
                 # Desserializar a mensagem recebida para extrair a sequência, identificador e dados
                 sequencia, identificador, dados = UDP.desserialize(data)
-                print(dados)
+                print(sequencia)
                 debug_print(f"[DEBUG - receive_task] Sequência: {sequencia}, Identificador: {identificador}")
 
                 # Verificar se a tarefa é direcionada ao agente correto
@@ -125,18 +125,18 @@ class NMS_Agent:
                     if not sequencia == 99:
                         self.tasks = json.loads(dados)
                         # Enviar um ACK de confirmação ao servidor
-                        ack_message = UDP(tipo=99, dados='', identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
+                        ack_message = UDP(tipo=99, dados='', identificador=identificador, sequencia=99, endereco=self.server_endereco, 
                                             porta=self.udp_porta, socket=self.udp_socket)
                         debug_print(f"[DEBUG - send_ack] Enviando ACK para {self.server_endereco}:{self.udp_porta}")
                         ack_message.send_ack()
                         # Processar a tarefa recebida
                         debug_print(f"[DEBUG - receive_task] Processando tarefas")
-                        ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
+                        ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=99, endereco=self.server_endereco, 
                                                 porta=self.udp_porta, socket=self.udp_socket)
                         ack_message.send_ack()
                         self.process_task()
                     else : 
-                        ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
+                        ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=99, endereco=self.server_endereco, 
                                                 porta=self.udp_porta, socket=self.udp_socket)
                         ack_message.send_ack()
                 else:
@@ -310,7 +310,6 @@ class NMS_Agent:
                 response = subprocess.run(comand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=40)
                 if "Connection refused" in response.stderr:
                     debug_print(f"[DEBUG - perform_network_tests] Connection refused: {response.stderr}")
-                    return None
                 debug_print(f"[DEBUG - perform_network_tests] Iperf response: {response.stdout}")
                 return response.stdout
             except subprocess.TimeoutExpired:
@@ -323,7 +322,11 @@ class NMS_Agent:
 
     def get_metrics(self, command, stdout):
         metrics = []
-        
+
+        if stdout is None:
+            print("stdout is None")
+            return metrics
+
         if command == 'ping':
             # Parse ping output
             packet_loss_match = re.search(r'(\d+)% packet loss', stdout)
