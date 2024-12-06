@@ -65,9 +65,13 @@ class UDP:
         mensagem_binaria = self.serialize()
         debug_print(f"[DEBUG - send_message] Enviando mensagem para {self.endereco}:{self.porta} - Tipo: {self.tipo}, Sequência: {self.sequencia}")
 
-        if self.tipo == 99:  # Envio de ACK sem esperar
+        if self.sequencia == 99:  # Envio de ACK sem esperar
             self.socket.sendto(mensagem_binaria, (self.endereco, self.porta))
-            print("[ACK] Enviado sem esperar confirmação")
+            print("[ACK] Enviado ack de registo")
+            return True
+        if self.sequencia == 98:  # Envio de ACK sem esperar
+            self.socket.sendto(mensagem_binaria, (self.endereco, self.porta))
+            print("[ACK] Enviado ack de tarefa")
             return True
 
         # Implementação de reenvio para mensagens que necessitam de confirmação

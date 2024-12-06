@@ -1,4 +1,4 @@
-import socket, json, os, subprocess, re, psutil, time, threading,sys
+import socket, json, os, subprocess, re, psutil, time, threading, sys
 from NetTask import UDP
 from AlertFlow import TCP
 
@@ -19,6 +19,7 @@ class NMS_Agent:
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.tasks = []
         self.metrics = {}
+        self.last_ack_time = 0  # Timestamp of the last received ACK
 
     # Obtém o endereço IP local do dispositivo (ID do NMS_Agent)
     def get_device_address(self):
@@ -47,7 +48,7 @@ class NMS_Agent:
             socket=self.udp_socket
         )
         ack_message.send_ack()
-
+        print(f"[DEBUG - connect_to_UDP_server] Enviado ACK de registo para {self.server_endereco}:{self.udp_porta}")
         # Step 2: Receive an ACK from the server
         try:
             while True:
@@ -60,6 +61,10 @@ class NMS_Agent:
                 if identificador == self.id and sequencia == 99:
                     debug_print(f"ACK recebido do servidor {server_address}")
                     break
+                if identificador == self.id and sequencia == 98:
+                    debug_print(f"ACK recebido indicando que nao ha tarefas atualmente para este agente")
+                    self.receive_task()
+                    return
         except socket.timeout:
             print("Tempo limite atingido ao esperar pelo ACK do servidor. Tentando novamente...")
             self.connect_to_UDP_server()  # Retry connecting to the server
@@ -81,12 +86,13 @@ class NMS_Agent:
                     tipo=99, 
                     dados="", 
                     identificador=self.id, 
-                    sequencia=99, 
+                    sequencia=98, 
                     endereco=self.server_endereco, 
                     porta=self.udp_porta, 
                     socket=self.udp_socket
                     )
                     ack_message.send_ack()
+                    print(f"[DEBUG - connect_to_UDP_server] Enviado ACK de tarefas inicias para {self.server_endereco}:{self.udp_porta}")
                     self.process_task()  # Process the received tasks
                     break
         except socket.timeout:
@@ -122,23 +128,24 @@ class NMS_Agent:
 
                 # Verificar se a tarefa é direcionada ao agente correto
                 if identificador == self.id:
-                    if not sequencia == 99:
+                    if not sequencia == 99 and not sequencia == 98:
                         self.tasks = json.loads(dados)
                         # Enviar um ACK de confirmação ao servidor
-                        ack_message = UDP(tipo=99, dados='', identificador=identificador, sequencia=99, endereco=self.server_endereco, 
+                        ack_message = UDP(tipo=99, dados='', identificador=identificador, sequencia=98, endereco=self.server_endereco, 
                                             porta=self.udp_porta, socket=self.udp_socket)
-                        debug_print(f"[DEBUG - send_ack] Enviando ACK para {self.server_endereco}:{self.udp_porta}")
+                        debug_print(f"[DEBUG - receive_task] Enviando ACK apos receber mais tarefas para {self.server_endereco}:{self.udp_porta}")
                         ack_message.send_ack()
                         # Processar a tarefa recebida
                         debug_print(f"[DEBUG - receive_task] Processando tarefas")
-                        ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=99, endereco=self.server_endereco, 
-                                                porta=self.udp_porta, socket=self.udp_socket)
-                        ack_message.send_ack()
                         self.process_task()
+                    elif sequencia == 99:
+                        debug_print("[DEBUG - receive_task] Faulty ack.")
+                        debug_print("[DEBUG - receive_task] Aguardando tarefas do NMS_Server...")
                     else : 
-                        ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=99, endereco=self.server_endereco, 
-                                                porta=self.udp_porta, socket=self.udp_socket)
+                        ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=98, endereco=self.server_endereco, 
+                                               porta=self.udp_porta, socket=self.udp_socket)
                         ack_message.send_ack()
+                        debug_print(f"[DEBUG - receive_task] Enviando ACK apos receber ACK para {self.server_endereco}:{self.udp_porta}")
                 else:
                     debug_print(f"[DEBUG - receive_task] Tarefa não direcionada para este agente. Ignorada.")
 
@@ -152,7 +159,6 @@ class NMS_Agent:
                 fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
                 print(exc_type, fname, exc_tb.tb_lineno)
 
-
     def process_task(self):
         for task in self.tasks:
             debug_print(f"[DEBUG - process_task] Processando tarefa {task[0]}")
@@ -160,26 +166,26 @@ class NMS_Agent:
             device_metrics = task[1].get('device_metrics')
             link_metrics = task[1].get('link_metrics')
             alert_conditions = task[1].get('alertflow_conditions')
-            self.task_manager(device_metrics,link_metrics,alert_conditions, frequency)
+            self.task_manager(device_metrics, link_metrics, alert_conditions, frequency)
             debug_print(f"[DEBUG - process_task] Tarefa {task[0]} processada com sucesso.")
 
         self.tasks = []
         print("Todas as tarefas foram processadas com sucesso.")
-        print("Tentando adequirir novas tarefas...")
+        print("Tentando adquirir novas tarefas...")
         self.receive_task()
 
-    def task_manager(self,device_metrics,link_metrics,alert_conditions, frequency):
+    def task_manager(self, device_metrics, link_metrics, alert_conditions, frequency):
         cpu_usage = False
         ram_usage = False
-        if device_metrics.get('cpu_usage') == True :
+        if device_metrics.get('cpu_usage') == True:
             cpu_usage = device_metrics.get('cpu_usage')
-        if device_metrics.get('ram_usage') == True :
+        if device_metrics.get('ram_usage') == True:
             ram_usage = device_metrics.get('ram_usage')
         print(json.dumps(link_metrics, indent=4))
         for command in link_metrics:
             debug_print(f"[DEBUG - task_manager] Executando comando {command}")
             performing_task = True
-            if command == 'iperf' :
+            if command == 'iperf':
                 bandwidth = link_metrics.get(command).get('bandwidth')
                 packet_loss = link_metrics.get(command).get('packet_loss')
                 jitter = link_metrics.get(command).get('jitter')
@@ -197,7 +203,7 @@ class NMS_Agent:
                     }
                 else :
                     print("Nenhuma métrica a ser medida.")
-            elif command == 'ping' :
+            elif command == 'ping':
                 latency = link_metrics.get(command).get('latency')
                 if latency:
                     debug_print("[DEBUG - task_manager] Executando teste de latência...")
