@@ -8,6 +8,9 @@ class MetricsViewer:
         self.metrics_data = {}  # Estrutura para armazenar as métricas recebidas
         self.create_gui()
 
+    def start(self):
+        self.root.mainloop()
+
     def create_gui(self):
         # Título
         title = tk.Label(self.root, text="NMS Metrics Viewer", font=("Arial", 16, "bold"))
@@ -90,8 +93,3 @@ class MetricsViewer:
                         state_label.config(bg="yellow", fg="black")
                     elif data["state"] == "Normal":
                         state_label.config(bg="green", fg="white")
-
-# main
-metrics_viewer = MetricsViewer()
-
-metrics_viewer.root.mainloop()

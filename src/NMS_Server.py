@@ -2,6 +2,7 @@ import socket, os, glob, json, struct, threading, re,sys, queue, select
 from AlertFlow import TCP
 from NetTask import UDP
 from Tarefa import Tarefa
+from GUI import MetricsViewer
 
 # Go to right folder 
 # cd ../../../ && cd home/Documents/cc-2425
@@ -195,6 +196,10 @@ class NMS_Server:
                 alert_type, device_id, current_value = TCP.deserialize_tcp(msg)
                 debug_print(f"Alerta recebido do dispositivo {device_id}: {alert_type}, Valor atual: {current_value}")
 
+    def start_gui(self):
+        metrics_viewer = MetricsViewer()
+        metrics_viewer.start()
+    
     def run(self):
         global debug
         while True:
@@ -203,6 +208,7 @@ class NMS_Server:
             print("2 - Iniciar socket UDP")
             print("3 - Load new tasks")
             print("4 - Debug mode")
+            print("5 - GUI")
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
@@ -223,6 +229,10 @@ class NMS_Server:
             elif option == "4":
                 debug = not debug
                 print(f"Debug mode {'ativado' if debug else 'desativado'}.")
+            elif option == "5":
+                # Iniciar a GUI em uma thread separada
+                threading.Thread(target=self.start_gui, daemon=True).start()
+
             else:
                 print("Opção inválida. Tente novamente.")
         sys.exit()
