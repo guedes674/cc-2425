@@ -2,7 +2,7 @@ import socket
 import struct 
 import time
 
-debug = False
+debug = True
 
 def debug_print(message):
     if debug:
@@ -79,9 +79,8 @@ class UDP:
             try:
                 ack_mensagem, _ = self.socket.recvfrom(1024)
                 ack_sequencia, ack_identificador, _ = UDP.desserialize(ack_mensagem)
-                if ack_sequencia == self.sequencia and ack_identificador == self.identificador:
-                    ack_recebido = True
-                    debug_print("[DEBUG - send_message] ACK válido recebido")
+                ack_recebido = True
+                debug_print("[DEBUG - send_message] ACK válido recebido")
             except socket.timeout:
                 debug_print("[ERRO - send_message] Timeout ao aguardar ACK")
                 tentativas += 1

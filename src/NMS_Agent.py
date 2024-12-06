@@ -16,7 +16,7 @@ class NMS_Agent:
         self.tcp_porta = tcp_porta
         self.udp_porta = udp_porta
         self.tcp_socket = None
-        self.udp_socket = None
+        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.tasks = []
         self.metrics = {}
 
@@ -34,19 +34,65 @@ class NMS_Agent:
 
     # Usando a função registo do NetTask para registar o NMS_Agent
     def connect_to_UDP_server(self):
-        mensagem_registo = UDP(
-            tipo=1, 
+        #self.udp_socket.settimeout(5)  # Set a timeout for the UDP socket
+
+        # Step 1: Send an ACK to the server
+        ack_message = UDP(
+            tipo=99, 
             dados="", 
             identificador=self.id, 
-            sequencia=1, 
+            sequencia=0, 
             endereco=self.server_endereco, 
             porta=self.udp_porta, 
             socket=self.udp_socket
         )
-        self.udp_socket = mensagem_registo.socket
-        mensagem_registo.send_message()
-        self.receive_task()
-        
+        ack_message.send_ack()
+
+        # Step 2: Receive an ACK from the server
+        try:
+            while True:
+                msg, server_address = self.udp_socket.recvfrom(4096)
+                if not msg:
+                    continue
+
+                # Deserialize the received message
+                sequencia, identificador, dados = UDP.desserialize(msg)
+                if identificador == self.id and sequencia == 0:
+                    debug_print(f"ACK recebido do servidor {server_address}")
+                    break
+        except socket.timeout:
+            print("Tempo limite atingido ao esperar pelo ACK do servidor. Tentando novamente...")
+            self.connect_to_UDP_server()  # Retry connecting to the server
+
+        # Step 3: Receive the task from the server
+        try:
+            while True:
+                msg, server_address = self.udp_socket.recvfrom(4096)
+                if not msg:
+                    continue
+
+                # Deserialize the received message
+                sequencia, identificador, dados = UDP.desserialize(msg)
+                if identificador == self.id and sequencia == 1:
+                    debug_print(f"Tarefa recebida do servidor {server_address}")
+                    
+                    self.tasks = json.loads(dados)  # Store the received tasks
+                    ack_message = UDP(
+                    tipo=99, 
+                    dados="", 
+                    identificador=self.id, 
+                    sequencia=0, 
+                    endereco=self.server_endereco, 
+                    porta=self.udp_porta, 
+                    socket=self.udp_socket
+                    )
+                    ack_message.send_ack()
+                    self.process_task()  # Process the received tasks
+                    break
+        except socket.timeout:
+            print("Tempo limite atingido ao esperar pela tarefa do servidor. Tentando novamente...")
+            self.connect_to_UDP_server()  # Retry connecting to the server
+
     # Usando a função registo do AlertFlow para registar o NMS_Agent
     def connect_to_TCP_server(self):
         mensagem_registo = TCP(
@@ -76,15 +122,23 @@ class NMS_Agent:
 
                 # Verificar se a tarefa é direcionada ao agente correto
                 if identificador == self.id:
-                    self.tasks = json.loads(dados)
-                    # Enviar um ACK de confirmação ao servidor
-                    ack_message = UDP(tipo=99, dados='', identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
-                                        porta=self.udp_porta, socket=self.udp_socket)
-                    debug_print(f"[DEBUG - send_ack] Enviando ACK para {self.server_endereco}:{self.udp_porta}")
-                    ack_message.send_ack()
-                    # Processar a tarefa recebida
-                    debug_print(f"[DEBUG - receive_task] Processando tarefas")
-                    self.process_task()
+                    if not sequencia == 99:
+                        self.tasks = json.loads(dados)
+                        # Enviar um ACK de confirmação ao servidor
+                        ack_message = UDP(tipo=99, dados='', identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
+                                            porta=self.udp_porta, socket=self.udp_socket)
+                        debug_print(f"[DEBUG - send_ack] Enviando ACK para {self.server_endereco}:{self.udp_porta}")
+                        ack_message.send_ack()
+                        # Processar a tarefa recebida
+                        debug_print(f"[DEBUG - receive_task] Processando tarefas")
+                        ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
+                                                porta=self.udp_porta, socket=self.udp_socket)
+                        ack_message.send_ack()
+                        self.process_task()
+                    else : 
+                        ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=self.server_endereco, 
+                                                porta=self.udp_porta, socket=self.udp_socket)
+                        ack_message.send_ack()
                 else:
                     debug_print(f"[DEBUG - receive_task] Tarefa não direcionada para este agente. Ignorada.")
 

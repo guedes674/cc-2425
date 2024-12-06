@@ -1,4 +1,4 @@
-import socket, os, glob, json, struct, threading, re,sys
+import socket, os, glob, json, struct, threading, re,sys, queue, select
 from AlertFlow import TCP
 from NetTask import UDP
 from Tarefa import Tarefa
@@ -24,6 +24,8 @@ class NMS_Server:
         self.tcp_started = False
         self.tcp_threads = []
         self.load_tasks_from_json()
+        self.task_queue = queue.Queue()
+        self.queue_event = threading.Event()
 
     # Lê todos os arquivos JSON na pasta de configurações
     def load_tasks_from_json(self,path = None):
@@ -35,14 +37,7 @@ class NMS_Server:
         for device in tdict:
             if device in self.agents:
                 print(f"O dispositivo {device} já está registrado no servidor, enviando tarefa.")
-                if self.tasks[device]:
-                    self.tasks[device] = tdict.get(device) + self.tasks[device]
-                else :
-                    self.tasks[device] = tdict.get(device)
-                print(f"Tasks loaded from extra file to be sent : {self.tasks[device]}")
-                print(f"Tarefas para o dispositivo {device}: {self.tasks[device]}")
-                self.distribute_tasks(device)
-                print(f"Tarefas distribuídas para o dispositivo {device}.")
+                self.add_task((device, tdict[device]))
         if not self.tasks:
             self.tasks = tdict
         else :
@@ -51,19 +46,13 @@ class NMS_Server:
             self.tasks_loaded[task] = True
 
     # Distribui as tarefas para os NMS_Agents via UDP
-    def distribute_tasks(self,address):
-        if not self.tasks:
-            print("Nenhuma tarefa carregada para distribuição.")
-            return
-        tasks_for_device = self.tasks.get(address)
+    def distribute_tasks(self,address,tasks_for_device):
         try:
             del self.tasks[address]
         except KeyError:
-            print(f"Erro ao remover a tarefa para o dispositivo {address}")
+            print(f"Task from queue")
         agent_port = self.agents.get(address)[1]
         agent_ip = self.agents.get(address)[0]
-        print(self.tasks)
-        print(json.dumps(tasks_for_device,indent=4))
         serialized_task = json.dumps(tasks_for_device, separators=(',', ':')).encode('utf-8')
         task_message = UDP(2, serialized_task, identificador=address, sequencia=1, endereco=agent_ip, porta=agent_port, socket = self.udp_socket)
         debug_print(f"[DEBUG - Servidor] Distribuindo tarefas para o dispositivo {address}")
@@ -95,40 +84,85 @@ class NMS_Server:
                 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 LOCAL_ADR = "10.0.5.10"
                 server_socket.bind((LOCAL_ADR, 5000))
-                server_socket.settimeout(None)  # Garantir que o socket não tenha um tempo limite
                 print("Servidor UDP esperando por conexões...")
 
                 while self.udp_started:
-                    try:
-                        msg, client_address = server_socket.recvfrom(1024)
-                        if not msg:
-                            print("Mensagem vazia recebida. Continuando...")
-                            continue
+                    # Use select to wait for either a socket event or a queue event
+                    ready_sockets, _, _ = select.select([server_socket], [], [], 1)
 
-                        print(f"Mensagem recebida de {client_address}")
+                    # Check if there are tasks in the queue
+                    if not self.task_queue.empty():
+                        task = self.task_queue.get()
+                        device = task[0]
+                        agent_address = self.agents.get(device)
+                        if agent_address:
+                            # Send an ACK to the agent
+                            ack_message = UDP(tipo=99, dados="", identificador=agent_address, sequencia=0, endereco=agent_address[0], 
+                                                porta=agent_address[1], socket=server_socket)
+                            ack_message.send_ack()
 
-                        # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
-                        sequencia, identificador, dados = UDP.desserialize(msg)
-                        debug_print(f"[DEBUG - dados udp] Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados}")
-                        # Criando o ACK como uma instância UDP
-                        ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=client_address[0], 
-                                            porta=client_address[1], socket=server_socket)
-                        ack_message.send_ack()
+                            # Wait for an ACK response
+                            server_socket.settimeout(5)  # Set a timeout for waiting for the ACK response
+                            try:
+                                while True:
+                                    msg, client_address = server_socket.recvfrom(4096)  # Increased buffer size to 4096 bytes
+                                    if not msg:
+                                        continue
 
-                        # Guardar ip do agente que acabou de se ligar
-                        self.agents[identificador] = (client_address[0], client_address[1])
-                        debug_print(f"[DEBUG - agentes] Agentes registrados no servidor: {self.agents}")
-                        self.distribute_tasks(client_address[0])
-                        #self.initialize_tasks(devices_task_sent)
-                    except socket.timeout:
-                        print("Tempo limite do socket atingido. Continuando...")
-                        pass
-                
+                                    # Deserialize the received message
+                                    sequencia, identificador, dados = UDP.desserialize(msg)
+                                    if sequencia == 99:
+                                        debug_print(f"ACK recebido de {client_address}")
+                                        # Send the task to the agent
+                                        self.distribute_tasks(device, task[1])
+                                        self.task_queue.task_done()
+                                        break
+                            except socket.timeout:
+                                print("Tempo limite atingido ao esperar pelo ACK. Movendo para a próxima tarefa...")
+                                # Put the task back into the queue to retry
+                                self.task_queue.put(task)
+                                continue
+                        else:
+                            # If the agent address is not found, mark the task as done
+                            self.task_queue.task_done()
+
+                        # If the queue is empty, clear the event
+                        if self.task_queue.empty():
+                            self.queue_event.clear()
+                    elif ready_sockets:
+                        try:
+                            msg, client_address = server_socket.recvfrom(4096)  # Increased buffer size to 4096 bytes
+                            if not msg:
+                                print("Mensagem vazia recebida. Continuando...")
+                                continue
+
+                            print(f"Mensagem recebida de {client_address}")
+
+                            # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
+                            sequencia, identificador, dados = UDP.desserialize(msg)
+                            debug_print(f"[DEBUG - dados udp] Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados}")
+                            # Criando o ACK como uma instância UDP
+                            ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=sequencia, endereco=client_address[0], 
+                                                porta=client_address[1], socket=server_socket)
+                            ack_message.send_ack()
+
+                            # Guardar ip do agente que acabou de se ligar
+                            self.agents[identificador] = (client_address[0], client_address[1])
+                            debug_print(f"[DEBUG - agentes] Agentes registrados no servidor: {self.agents}")
+                            print(f"tasks {self.tasks[client_address[0]]}")
+                            self.distribute_tasks(client_address[0],self.tasks[client_address[0]])
+                            #self.initialize_tasks(devices_task_sent)
+                        except socket.timeout:
+                            print("Tempo limite do socket atingido. Continuando...")
+                            pass
         except struct.error as e:
             print("Erro ao desserializar a mensagem:", e)
         except OSError as e:
             print(f"OSError: {e}")
 
+    def add_task(self, task):
+        self.task_queue.put(task)
+        self.queue_event.set()
 
     def start_tcp_server(self):
         """Listens for incoming TCP connections. Must be threaded. Passive method should close the connection, not the socket."""
