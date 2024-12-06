@@ -59,27 +59,12 @@ class NMS_Server:
         agent_port = self.agents.get(address)[1]
         agent_ip = self.agents.get(address)[0]
         serialized_task = json.dumps(tasks_for_device, separators=(',', ':')).encode('utf-8')
-        task_message = UDP(2, serialized_task, identificador=address, sequencia=1, endereco=agent_ip, porta=agent_port, socket = self.udp_socket)
+        task_message = UDP(serialized_task, identificador=address, tipo=1, endereco=agent_ip, porta=agent_port, socket = self.udp_socket)
         debug_print(f"[DEBUG - Servidor] Distribuindo tarefas para o dispositivo {address}")
         if task_message.send_message():
             print(f"Tarefa enviada com sucesso para o dispositivo {address}.")
         else:
             print(f"Erro ao enviar a tarefa para o dispositivo {address}")
-
-
-    def place_holder(self):
-        if not self.tasks:
-            print("Nenhuma tarefa carregada para monitoramento.")
-            return
-
-        for task in self.tasks:
-            task_id = task.tasks[0]['task_id']
-            frequency = task.tasks[0]['frequency']
-            devices = task.tasks[0]['devices']
-
-            for device in devices:
-                thread = threading.Thread(target=self.monitoring_task, args=(task))
-                thread.start()
 
     def start_udp_server(self, devices_task_sent=[]):
         """Listens for incoming UDP connections. Must be threaded."""
@@ -102,7 +87,7 @@ class NMS_Server:
                         agent_address = self.agents.get(device)
                         if agent_address:
                             # Send an ACK to the agent
-                            ack_message = UDP(tipo=99, dados="", identificador=agent_address[0], sequencia=98, endereco=agent_address[0],
+                            ack_message = UDP(dados="", identificador=agent_address[0], tipo=98, endereco=agent_address[0],
                                                 porta=agent_address[1], socket=server_socket)
                             ack_message.send_ack()
 
@@ -118,8 +103,8 @@ class NMS_Server:
                                         continue
 
                                     # Deserialize the received message
-                                    sequencia, identificador, dados = UDP.desserialize(msg)
-                                    if sequencia == 98:
+                                    tipo, identificador, dados = UDP.desserialize(msg)
+                                    if tipo == 98:
                                         debug_print(f"ACK recebido de {client_address}")
                                         # Send the task to the agent
                                         self.distribute_tasks(device, task[1])
@@ -141,7 +126,7 @@ class NMS_Server:
                         # If the queue is empty, clear the event
                         if self.task_queue.empty():
                             self.queue_event.clear()
-                    elif ready_sockets:
+                    elif ready_sockets: # recebe registo
                         try:
                             msg, client_address = server_socket.recvfrom(4096)  # Increased buffer size to 4096 bytes
                             if not msg:
@@ -150,11 +135,11 @@ class NMS_Server:
 
                             print(f"Mensagem recebida de {client_address}")
                             # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
-                            sequencia, identificador, dados = UDP.desserialize(msg)
-                            debug_print(f"[DEBUG - dados udp] Dados desserializados - Sequência: {sequencia}, Identificador: {identificador}, Dados: {dados}")
+                            tipo, identificador, dados = UDP.desserialize(msg)
+                            debug_print(f"[DEBUG - dados udp] Dados desserializados - Tipo: {tipo}, Identificador: {identificador}, Dados: {dados}")
                             # Criando o ACK como uma instância UDP
-                            if sequencia == 99:
-                                ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=98, endereco=client_address[0], 
+                            if tipo == 99:
+                                ack_message = UDP(dados="", identificador=identificador, tipo=98, endereco=client_address[0], 
                                                     porta=client_address[1], socket=server_socket)
                                 ack_message.send_ack()
 
@@ -163,15 +148,42 @@ class NMS_Server:
                                 print(f"Agentes registrados no servidor: {self.agents}")
                                 debug_print(f"[DEBUG - agentes] Agentes registrados no servidor: {self.agents}")
                                 print(client_address[0])
-                                print(self.tasks)
                                 try :
                                     client_tasks = self.tasks[client_address[0]]
                                     self.distribute_tasks(client_address[0],client_tasks)
                                 except KeyError:
                                     print("Nenhuma tarefa para enviar para este agente")
-                                    ack_message = UDP(tipo=99, dados="", identificador=identificador, sequencia=99, endereco=client_address[0], 
+                                    ack_message = UDP(dados="", identificador=identificador, tipo=99, endereco=client_address[0], 
                                                     porta=client_address[1], socket=server_socket)
                                     ack_message.send_ack()
+                            elif tipo == 96:
+                                debug_print("[DEBUG] Recebido ack de iperf porta")
+                                ack_message = UDP(dados="", identificador=identificador, tipo=96, endereco=client_address[0], 
+                                                    porta=client_address[1], socket=server_socket)
+                                ack_message.send_ack()
+                                try:
+                                    msg, client_address = server_socket.recvfrom(4096)  # Increased buffer size to 4096 bytes
+                                    if not msg:
+                                        print("Mensagem vazia recebida. Continuando...")
+                                        continue
+
+                                    print(f"Mensagem recebida de {client_address}")
+                                    # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
+                                    tipo, identificador, dados = UDP.desserialize(msg)
+                                    debug_print(f"[DEBUG - dados udp] Dados desserializados - Tipo: {tipo}, Identificador: {identificador}, Dados: {dados}")
+                                    iperf_server = self.agents.get(dados)
+                                    print(f"Agentes registrados no servidor: {self.agents}")
+                                    ack_iperf = UDP(dados="", identificador=identificador, tipo=96, endereco=client_address[0], 
+                                               porta=client_address[1], socket=self.udp_socket)
+                                    ack_iperf.send_ack()
+                                    print(f"IPERF SERVER: {iperf_server}")
+                                    ack_message = UDP(dados=str(iperf_server[1]), identificador=identificador, tipo=2, endereco=client_address[0], 
+                                                      porta=client_address[1], socket=server_socket)
+                                    ack_message.send_message()
+                                    print(f"Enviando iperf server {iperf_server} para {client_address[0]}")
+                                except socket.timeout:
+                                    print("Tempo limite do socket atingido. Continuando...")
+                                    pass
                             else :
                                 print("Ack recebido nao e de registo")
                         except socket.timeout:
