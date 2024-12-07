@@ -55,8 +55,8 @@ class NMS_Agent:
                     ack_message = UDP(
                     dados="", 
                     identificador=self.id, 
-                    tipo=98, 
-                    endereco=self.server_endereco, 
+                    tipo=98,
+                    endereco=self.server_endereco,
                     porta=self.udp_porta, 
                     socket=self.udp_socket
                     )
@@ -295,8 +295,11 @@ class NMS_Agent:
                 try:
                     data = None
                     while True:
-                        data, _ = self.udp_socket.recvfrom(4096)
-                        tipo, _, dados = UDP.desserialize(data)
+                        try :
+                            data, _ = self.udp_socket.recvfrom(4096)
+                            tipo, _, dados = UDP.desserialize(data)
+                        except Exception as e:
+                            continue
                         if tipo == 2:
                             break
                     tcp_porta=int(dados)
@@ -322,9 +325,15 @@ class NMS_Agent:
                     message = TCP(0, "", self.id, self.server_endereco,tcp_porta, self.tcp_socket)
                     message.send_message()
                     tcp_porta = None
+                    
                     metrics = self.get_metrics(command,output)
-                    self.update_metric(metrics)
                     debug_print(f"[DEBUG - task_manager] Métricas atualizadas: {metrics}")
+                    self.update_metric(metrics)
+                    send_ack_get_reply(self.id,10, self.server_endereco, self.udp_porta,self.udp_socket)
+                    metrics.append(('destination',tool_settings.get('server_address')))
+                    metrics_message = UDP(tipo=2,dados = json.dumps(metrics) , identificador=self.id, endereco=self.server_endereco, porta=self.udp_porta, socket=self.udp_socket)
+                    metrics_message.send_message()
+
                     print(json.dumps(self.metrics, indent=4))
                     performing_task = False
                 except socket.timeout:

@@ -60,36 +60,32 @@ class MetricsViewer:
             state_label.config(bg="green", fg="white")
         state_label.grid(row=row, column=3, padx=40, pady=5, sticky="w")
 
-    def refresh_metrics(self):
+    def refresh_metrics(self, device_id,metrics):
         """Atualiza as métricas na interface gráfica."""
         simulated_metrics = {
-            "Client1": {
-                "CPU Usage": {"value": "85%", "state": "Crítico"},
-                "RAM Usage": {"value": "60%", "state": "Normal"},
-                "Packet Loss": {"value": "5%", "state": "Atenção"}
+            "10.0.7.10": {
+                "bandwidth": {"value": "100 Mbps"},
+                "jitter": {"value": "10 ms"},
+                "cpu usage": {"value": "85%"},
+                "ram usage": {"value": "60%"},
+                "packet Loss": {"value": "5%"}
             },
-            "Client2": {
-                "CPU Usage": {"value": "70%", "state": "Atenção"},
-                "RAM Usage": {"value": "50%", "state": "Normal"},
-                "Packet Loss": {"value": "2%", "state": "Normal"}
+            "10.0.4.10": {
+                "cpu usage": {"value": "70%"},
+                "ram sage": {"value": "50%"},
+                "packet loss": {"value": "2%"},
+                "latency": {"value": "20 ms"}
             }
         }
 
         for client_id, metrics in simulated_metrics.items():
-            for metric_name, data in metrics.items():
-                if (client_id, metric_name) not in self.metrics_data:
-                    self.add_metric(client_id, metric_name, data["value"], data["state"])
-                else:
-                    # Atualiza o valor e o estado da métrica existente
-                    self.metrics_data[(client_id, metric_name)]["value"] = data["value"]
-                    self.metrics_data[(client_id, metric_name)]["state"] = data["state"]
-                    row = list(self.metrics_data.keys()).index((client_id, metric_name)) + 1
-                    self.metrics_table.grid_slaves(row=row, column=2)[0].config(text=data["value"])
-                    state_label = self.metrics_table.grid_slaves(row=row, column=3)[0]
-                    state_label.config(text=data["state"])
-                    if data["state"] == "Crítico":
-                        state_label.config(bg="red", fg="white")
-                    elif data["state"] == "Atenção":
-                        state_label.config(bg="yellow", fg="black")
-                    elif data["state"] == "Normal":
-                        state_label.config(bg="green", fg="white")
+            if client_id == device_id:
+                for metric_name, data in metrics.items():
+                    if metric_name not in self.metrics_data:
+                        self.add_metric(client_id, metric_name, data["value"])
+                    else:
+                        # Atualiza o valor e o estado da métrica existente
+                        self.metrics_data[(client_id, metric_name)]["value"] = data["value"]
+                        row = list(self.metrics_data.keys()).index((client_id, metric_name)) + 1
+                        self.metrics_table.grid_slaves(row=row, column=2)[0].config(text=data["value"])
+                        state_label = self.metrics_table.grid_slaves(row=row, column=3)[0]

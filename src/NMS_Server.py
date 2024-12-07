@@ -23,9 +23,11 @@ class NMS_Server:
         self.udp_socket.settimeout(None)
         self.udp_started = False
         self.tcp_threads = {}
+        self.metrics = {} # Dicionário onde cada chave é o device_id e o valor é um dicionário com as métricas das conexoes do dispositivo
         self.load_tasks_from_json()
         self.task_queue = queue.Queue()
         self.queue_event = threading.Event()
+        self.metrics_viewer = None
 
     # Lê todos os arquivos JSON na pasta de configurações
     def load_tasks_from_json(self,path = None):
@@ -205,6 +207,39 @@ class NMS_Server:
                                 message = UDP(dados=dados, identificador=identificador, tipo=2, endereco=client_address[0], 
                                                     porta=client_address[1], socket=server_socket)
                                 message.send_message()
+                            elif tipo == 10:
+                                
+                                try : 
+                                    ack = False
+                                    print("ACK metricas")
+                                    ack_message = UDP(dados="", identificador=identificador, tipo=10, endereco=client_address[0], 
+                                                    porta=client_address[1], socket=server_socket)
+                                    ack_message.send_ack()
+                                    while not ack :
+                                        
+                                        msg, client_address = server_socket.recvfrom(4096)  # Increased buffer size to 4096 bytes
+                                        if not msg:
+                                            print("Mensagem vazia recebida. Continuando...")
+                                        print(f"Mensagem recebida de {client_address}")
+                                        # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
+                                        tipo, identificador, dados = UDP.desserialize(msg)
+                                        if tipo == 2:
+                                            ack = True
+                                except socket.timeout:
+                                    print("Tempo limite do socket atingido. Continuando...")
+                                print(f"Type dados {type(dados)}")
+                                metrics = json.loads(dados)
+                                debug_print(f"[DEBUG - metricas] Metricas do dispositivo {client_address[0]}: {metrics}")
+                                metrics_for_gui = {}
+                                for metric in metrics :
+                                    metrics_for_gui[metric] = metrics[metric]
+
+                                self.metrics_viewer.refresh_metrics(metrics_for_gui)
+
+                                self.metrics[client_address[0]] = metrics
+                                
+                                
+
                             else :
                                 print("Ack recebido nao é de registo")
                         except socket.timeout:
@@ -242,8 +277,8 @@ class NMS_Server:
             pass
 
     def start_gui(self):
-        metrics_viewer = MetricsViewer()
-        metrics_viewer.start()
+        self.metrics_viewer = MetricsViewer()
+        self.metrics_viewer.start()
     
     def run(self):
         global debug
