@@ -10,10 +10,9 @@ def debug_print(message):
         print(message)
 
 class NMS_Agent:
-    def __init__(self, server_endereco, tcp_porta, udp_porta):
+    def __init__(self, server_endereco, udp_porta):
         self.id = self.get_device_address()    # Obter o endereço IP do prórprio nodo
         self.server_endereco = server_endereco
-        self.tcp_porta = tcp_porta
         self.udp_porta = udp_porta
         self.tcp_socket = None
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -37,18 +36,9 @@ class NMS_Agent:
     def connect_to_UDP_server(self):
         #self.udp_socket.settimeout(5)  # Set a timeout for the UDP socket
 
-        # Step 1: Send an ACK to the server
-        ack_message = UDP(
-            dados="", 
-            identificador=self.id, 
-            tipo=99, 
-            endereco=self.server_endereco, 
-            porta=self.udp_porta, 
-            socket=self.udp_socket
-        )
-        ack_message.send_ack()
-        print(f"[DEBUG - connect_to_UDP_server] Enviado ACK de registo para {self.server_endereco}:{self.udp_porta}")
-        # Step 2: Receive an ACK from the server
+        # Step 1: Send an ACK to the server to get the tasks
+        send_ack_get_reply(self.id, 99, self.server_endereco, self.udp_porta, self.udp_socket)
+        # Step 2: Receive the task from the server
         try:
             while True:
                 msg, server_address = self.udp_socket.recvfrom(4096)
@@ -57,26 +47,7 @@ class NMS_Agent:
 
                 # Deserialize the received message
                 tipo, identificador, dados = UDP.desserialize(msg)
-                if identificador == self.id and tipo == 99:
-                    debug_print(f"ACK recebido do servidor {server_address}")
-                    break
-                if identificador == self.id and tipo == 98:
-                    debug_print(f"ACK recebido indicando que nao ha tarefas atualmente para este agente")
-                    self.receive_task()
-                    return
-        except socket.timeout:
-            print("Tempo limite atingido ao esperar pelo ACK do servidor. Tentando novamente...")
-            self.connect_to_UDP_server()  # Retry connecting to the server
-
-        # Step 3: Receive the task from the server
-        try:
-            while True:
-                msg, server_address = self.udp_socket.recvfrom(4096)
-                if not msg:
-                    continue
-
-                # Deserialize the received message
-                tipo, identificador, dados = UDP.desserialize(msg)
+                
                 if identificador == self.id and tipo == 1:
                     debug_print(f"Tarefa recebida do servidor {server_address}")
                     
@@ -93,6 +64,9 @@ class NMS_Agent:
                     print(f"[DEBUG - connect_to_UDP_server] Enviado ACK de tarefas inicias para {self.server_endereco}:{self.udp_porta}")
                     self.process_task()  # Process the received tasks
                     break
+                elif dados == "" and tipo == 2:
+                    self.receive_task()
+                    break
         except socket.timeout:
             print("Tempo limite atingido ao esperar pela tarefa do servidor. Tentando novamente...")
             self.connect_to_UDP_server()  # Retry connecting to the server
@@ -103,8 +77,7 @@ class NMS_Agent:
             tipo=1, 
             dados="", 
             identificador=self.id, 
-            endereco=self.server_endereco, 
-            porta=self.tcp_porta,
+            endereco=self.server_endereco,
             socket=self.tcp_socket
         )
         self.tcp_socket = mensagem_registo.socket
@@ -112,16 +85,14 @@ class NMS_Agent:
 
     # No método receive_task do agente
     def receive_task(self):
-        debug_print("[DEBUG - receive_task] Aguardando tarefas do NMS_Server...")
         while True:
+            debug_print("[DEBUG - receive_task] Aguardando tarefas do NMS_Server...")
             try:
-                # Recebe a mensagem e o endereço de onde ela foi enviada
+                # Esperar por ack do servidor
                 data, addr = self.udp_socket.recvfrom(4096)
-                debug_print(f"[DEBUG - receive_task] Mensagem recebida de {addr[0]} na porta {addr[1]}")  # addr[0] -> IP, addr[1] -> Porta
 
                 # Desserializar a mensagem recebida para extrair o tipo, identificador e dados
                 tipo, identificador, dados = UDP.desserialize(data)
-                debug_print(f"[DEBUG - receive_task] Tipo: {tipo}, Identificador: {identificador}")
 
                 # Verificar se a tarefa é direcionada ao agente correto
                 if identificador == self.id:
@@ -138,7 +109,7 @@ class NMS_Agent:
                     elif tipo == 99:
                         debug_print("[DEBUG - receive_task] Faulty ack.")
                         debug_print("[DEBUG - receive_task] Aguardando tarefas do NMS_Server...")
-                    else : 
+                    else :
                         ack_message = UDP(dados="", identificador=identificador, tipo=98, endereco=self.server_endereco, 
                                                porta=self.udp_porta, socket=self.udp_socket)
                         ack_message.send_ack()
@@ -157,48 +128,49 @@ class NMS_Agent:
                 print(exc_type, fname, exc_tb.tb_lineno)
 
     def iperf_connection(self, role,comand,server_address=None):
-        if role == 'client':
-            #ack_iperf = UDP(dados="", identificador=self.id, tipo=96, endereco=self.server_endereco, 
-            #                                   porta=self.udp_porta, socket=self.udp_socket)
-            #ack_iperf.send_ack()
-            #try:
-            #    # Recebe a mensagem e o endereço de onde ela foi enviada
-            #   data, addr = self.udp_socket.recvfrom(4096)
-            #    debug_print(f"[DEBUG - receive_task] Mensagem recebida de {addr[0]} na porta {addr[1]}")  # addr[0] -> IP, addr[1] -> Porta#
+        try :
+            if role == 'client':
+                # Manda ack ao server para mandar a porta do iperf
+                send_ack_get_reply(self.id,96, self.server_endereco, self.udp_porta,self.udp_socket)
+                iperf_message = UDP(dados=server_address, identificador=self.id, tipo=2, endereco=self.server_endereco,
+                                    porta= self.udp_porta, socket=self.udp_socket)
+                iperf_message.send_message()
 
-            #    # Desserializar a mensagem recebida para extrair o tipo, identificador e dados
-            #    tipo, identificador, dados = UDP.desserialize(data)
-            #    debug_print(f"[DEBUG - receive_task] Tipo: {tipo}, Identificador: {identificador}")
-            #    if tipo == 96:
-            send_ack_get_reply(self.id,96, self.server_endereco, self.udp_porta,self.udp_socket)
-            iperf_message = UDP(dados=server_address, identificador=self.id, tipo=2, endereco=self.server_endereco,
-                                porta= self.udp_porta, socket=self.udp_socket)
-            iperf_message.send_message()
-
-            debug_print(f"[DEBUG - receive_task] Ack apos mandar")
-            ack_iperf = UDP(dados="", identificador=self.id, tipo=96, endereco=self.server_endereco, 
-                                        porta=self.udp_porta, socket=self.udp_socket)
-            ack_iperf.send_ack()
-            try:
-                # Recebe a mensagem e o endereço de onde ela foi enviada
-                data, addr = self.udp_socket.recvfrom(4096)
-                debug_print(f"[DEBUG - receive_task] Mensagem recebida de {addr[0]} na porta {addr[1]}")  # addr[0] -> IP, addr[1] -> Porta
-
-                # Desserializar a mensagem recebida para extrair o tipo, identificador e dados
-                tipo, identificador, dados = UDP.desserialize(data)
-                debug_print(f"[DEBUG - receive_task] Tipo: {tipo}, Identificador: {identificador}")
-                print(dados)
-                iperf_porta = dados
-                ack_iperf = UDP(dados="", identificador=self.id, tipo=96, endereco=self.server_endereco, 
-                                        porta=self.udp_porta, socket=self.udp_socket)
-                ack_iperf.send_ack()
-                print(f"[DEBUG - receive_task] Iperf porta: {iperf_porta}")
-                # comunicar com agent que vai ser servidor do iperf
-                porta = int(iperf_porta)
-                ack_iperf = UDP(dados="", identificador=self.id, tipo=96, endereco=server_address, 
-                                        porta=porta, socket=self.udp_socket)
-                ack_iperf.send_ack()
                 try:
+                    data, addr = self.udp_socket.recvfrom(4096)
+
+                    # Esperando resposta do servidor com porta iperf, caso tipo seja 88 o servidor iperf não está disponível
+                    tipo, identificador, dados = UDP.desserialize(data)
+                    if tipo == 88:
+                        print(["[ERROR - iperf_connection] O servidor iperf não está disponível."])
+                        return
+                    
+                    print(dados)
+                    iperf_porta = dados
+                    ack_iperf = UDP(dados="", identificador=self.id, tipo=96, endereco=self.server_endereco, 
+                                            porta=self.udp_porta, socket=self.udp_socket)
+                    ack_iperf.send_ack()
+                    print(f"[DEBUG - receive_task] Iperf porta: {iperf_porta}")
+                    # comunicar com agent que vai ser servidor do iperf
+                    porta = int(iperf_porta)
+                    send_ack_get_reply(self.id,96,server_address,porta,self.udp_socket)
+
+                    try:    
+                        response = subprocess.run(comand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=40)
+                        debug_print(f"[DEBUG - perform_network_tests] Iperf response: {response.stdout}")
+                        return response.stdout
+                    except subprocess.TimeoutExpired:
+                        debug_print(f"[DEBUG - perform_network_tests] Iperf test timed out.")
+                        return None
+                    except Exception as e:
+                        debug_print(f"[DEBUG - perform_network_tests] Error: {e}")
+                        return None
+                except socket.timeout: 
+                    debug_print("[DEBUG - receive_task] Tempo esgotado. Nenhuma mensagem recebida.")
+                    return
+            else:
+                try:
+                    print("Aguardando conexão de um cliente iperf...")
                     # Recebe a mensagem e o endereço de onde ela foi enviada
                     data, addr = self.udp_socket.recvfrom(4096)
                     debug_print(f"[DEBUG - receive_task] Mensagem recebida de {addr[0]} na porta {addr[1]}")  # addr[0] -> IP, addr[1] -> Porta
@@ -206,7 +178,9 @@ class NMS_Agent:
                     # Desserializar a mensagem recebida para extrair o tipo, identificador e dados
                     tipo, identificador, dados = UDP.desserialize(data)
                     debug_print(f"[DEBUG - receive_task] Tipo: {tipo}, Identificador: {identificador}")
-
+                    ack_iperf = UDP(dados="", identificador=self.id, tipo=96, endereco=addr[0], 
+                                                porta=addr[1], socket=self.udp_socket)
+                    ack_iperf.send_ack()
                     try:    
                         response = subprocess.run(comand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=40)
                         #if "Connection refused" in response.stderr:
@@ -219,41 +193,14 @@ class NMS_Agent:
                     except Exception as e:
                         debug_print(f"[DEBUG - perform_network_tests] Error: {e}")
                         return None
-
                 except socket.timeout:
                     debug_print("[DEBUG - receive_task] Tempo esgotado. Nenhuma mensagem recebida.")
                     return
-            except socket.timeout: 
-                debug_print("[DEBUG - receive_task] Tempo esgotado. Nenhuma mensagem recebida.")
-                return
-        else:
-            try:
-                print("Aguardando conexão de um cliente iperf...")
-                # Recebe a mensagem e o endereço de onde ela foi enviada
-                data, addr = self.udp_socket.recvfrom(4096)
-                debug_print(f"[DEBUG - receive_task] Mensagem recebida de {addr[0]} na porta {addr[1]}")  # addr[0] -> IP, addr[1] -> Porta
-
-                # Desserializar a mensagem recebida para extrair o tipo, identificador e dados
-                tipo, identificador, dados = UDP.desserialize(data)
-                debug_print(f"[DEBUG - receive_task] Tipo: {tipo}, Identificador: {identificador}")
-                ack_iperf = UDP(dados="", identificador=self.id, tipo=96, endereco=addr[0], 
-                                               porta=addr[1], socket=self.udp_socket)
-                ack_iperf.send_ack()
-                try:    
-                    response = subprocess.run(comand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=40)
-                    #if "Connection refused" in response.stderr:
-                    #    debug_print(f"[DEBUG - perform_network_tests] Connection refused: {response.stderr}")
-                    debug_print(f"[DEBUG - perform_network_tests] Iperf response: {response.stdout}")
-                    return response.stdout
-                except subprocess.TimeoutExpired:
-                    debug_print(f"[DEBUG - perform_network_tests] Iperf test timed out.")
-                    return None
-                except Exception as e:
-                    debug_print(f"[DEBUG - perform_network_tests] Error: {e}")
-                    return None
-            except socket.timeout:
-                debug_print("[DEBUG - receive_task] Tempo esgotado. Nenhuma mensagem recebida.")
-                return
+        except Exception as e:
+            print(f"[ERRO - receive_task] Falha ao receber mensagem: {e}")
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
 
     def ping_connection(self,comand):
         try:
@@ -268,85 +215,135 @@ class NMS_Agent:
         except Exception as e:
             debug_print(f"[DEBUG - perform_network_tests] Error: {e}")
 
-    def process_task(self):
-        for task in self.tasks:
-            debug_print(f"[DEBUG - process_task] Processando tarefa {task[0]}")
-            frequency = task[1].get('frequency')
-            device_metrics = task[1].get('device_metrics')
-            link_metrics = task[1].get('link_metrics')
-            alert_conditions = task[1].get('alertflow_conditions')
-            self.task_manager(device_metrics, link_metrics, alert_conditions, frequency)
-            debug_print(f"[DEBUG - process_task] Tarefa {task[0]} processada com sucesso.")
 
-        self.tasks = []
-        print("Todas as tarefas foram processadas com sucesso.")
-        print("Tentando adquirir novas tarefas...")
-        self.receive_task()
+
+
+    def process_task(self):
+        try :
+            for task in self.tasks:
+                debug_print(f"[DEBUG - process_task] Processando tarefa {task[0]}")
+                frequency = task[1].get('frequency')
+                device_metrics = task[1].get('device_metrics')
+                link_metrics = task[1].get('link_metrics')
+                alert_conditions = task[1].get('alertflow_conditions')
+                self.task_manager(device_metrics, link_metrics, alert_conditions, frequency)
+                debug_print(f"[DEBUG - process_task] Tarefa {task[0]} processada com sucesso.")
+
+            self.tasks = []
+            print("Todas as tarefas foram processadas com sucesso.")
+            print("Tentando adquirir novas tarefas...")
+            self.receive_task()
+        except Exception as e:
+            print(f"[ERRO - receive_task] Falha ao receber mensagem: {e}")
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
+
+
+
 
     def task_manager(self, device_metrics, link_metrics, alert_conditions, frequency):
-        cpu_usage = False
-        ram_usage = False
-        if device_metrics.get('cpu_usage') == True:
-            cpu_usage = device_metrics.get('cpu_usage')
-        if device_metrics.get('ram_usage') == True:
-            ram_usage = device_metrics.get('ram_usage')
-        print(json.dumps(link_metrics, indent=4))
-        for command in link_metrics:
-            debug_print(f"[DEBUG - task_manager] Executando comando {command}")
-            performing_task = True
-            if command == 'iperf':
-                bandwidth = link_metrics.get(command).get('bandwidth')
-                packet_loss = link_metrics.get(command).get('packet_loss')
-                jitter = link_metrics.get(command).get('jitter')
-                if jitter == 'true':
-                    jitter_threshold = alert_conditions.get('jitter_threshold')
-                if bandwidth == 'true':
-                    bandwidth_threshold = alert_conditions.get('bandwidth_threshold')
-                if bandwidth or jitter or packet_loss:
-                    tool_settings = {
-                        'role' : link_metrics.get(command).get('role'),
-                        'server_address' : link_metrics.get(command).get('server_address') if link_metrics.get(command).get('role') == 'client' else None,
-                        'duration' : link_metrics.get(command).get('duration'),
-                        'frequency' : link_metrics.get(command).get('frequency'),
-                        'transport' : link_metrics.get(command).get('transport')
-                    }
-                else :
-                    print("Nenhuma métrica a ser medida.")
-            elif command == 'ping':
-                latency = link_metrics.get(command).get('latency')
-                if latency:
-                    debug_print("[DEBUG - task_manager] Executando teste de latência...")
-                    command = 'ping'
-                    tool_settings = {
-                        'destination' : link_metrics.get(command).get('destination'),
-                        'frequency' : link_metrics.get(command).get('frequency'),
-                        'duration' : link_metrics.get(command).get('duration'),
-                    }
-                    #metrics = self.get_metrics('ping',output)
-            if ram_usage == 'true':
-                ram_usage_threshold = alert_conditions.get('ram_usage_threshold')
-            if cpu_usage == 'true':
-                cpu_usage_threshold = alert_conditions.get('cpu_usage_threshold')
-            
-            
-            #threading.Thread(target=self.monitor_task, args=(frequency,alert_conditions, ram_usage, cpu_usage)).start() 
-            command = self.parse_command(command,tool_settings)
-            output = None
-            if command[0] == 'ping':
-                output = self.ping_connection(command)
-            elif command[0] == 'iperf':
-                output = self.iperf_connection(tool_settings.get('role'),command,tool_settings.get('server_address'))
-            metrics = self.get_metrics(command,output)
-            self.update_metric(metrics)
-            debug_print(f"[DEBUG - task_manager] Métricas atualizadas: {metrics}")
-            print(json.dumps(self.metrics, indent=4))
-            #metrics = self.get_metrics('iperf',output)
-            performing_task = False
-    
-        #metrics_message = UDP(tipo=3, dados=self.metrics, identificador=self.id, endereco=self.server_endereco, porta=self.udp_porta, socket=self.udp_socket)
-        #metrics_message.send_message()
-        self.metrics = {}
-        # Verifica se os thresholds foram ultrapassados
+        try :
+            cpu_usage = False
+            ram_usage = False
+            if device_metrics.get('cpu_usage') == True:
+                cpu_usage = device_metrics.get('cpu_usage')
+            if device_metrics.get('ram_usage') == True:
+                ram_usage = device_metrics.get('ram_usage')
+            print(json.dumps(link_metrics, indent=4))
+            for command in link_metrics:
+                debug_print(f"[DEBUG - task_manager] Executando comando {command}")
+                performing_task = True
+                if command == 'iperf':
+                    bandwidth = link_metrics.get(command).get('bandwidth')
+                    packet_loss = link_metrics.get(command).get('packet_loss')
+                    jitter = link_metrics.get(command).get('jitter')
+                    if jitter == 'true':
+                        jitter_threshold = alert_conditions.get('jitter_threshold')
+                    if bandwidth == 'true':
+                        bandwidth_threshold = alert_conditions.get('bandwidth_threshold')
+                    if bandwidth or jitter or packet_loss:
+                        tool_settings = {
+                            'role' : link_metrics.get(command).get('role'),
+                            'server_address' : link_metrics.get(command).get('server_address') if link_metrics.get(command).get('role') == 'client' else None,
+                            'duration' : link_metrics.get(command).get('duration'),
+                            'frequency' : link_metrics.get(command).get('frequency'),
+                            'transport' : link_metrics.get(command).get('transport')
+                        }
+                    else :
+                        print("Nenhuma métrica a ser medida.")
+                elif command == 'ping':
+                    latency = link_metrics.get(command).get('latency')
+                    if latency:
+                        debug_print("[DEBUG - task_manager] Executando teste de latência...")
+                        command = 'ping'
+                        tool_settings = {
+                            'destination' : link_metrics.get(command).get('destination'),
+                            'frequency' : link_metrics.get(command).get('frequency'),
+                            'duration' : link_metrics.get(command).get('duration'),
+                        }
+                        #metrics = self.get_metrics('ping',output)
+                if ram_usage == 'true':
+                    ram_usage_threshold = alert_conditions.get('ram_usage_threshold')
+                if cpu_usage == 'true':
+                    cpu_usage_threshold = alert_conditions.get('cpu_usage_threshold')
+
+                #threading.Thread(target=self.monitor_task, args=(frequency,alert_conditions, ram_usage, cpu_usage)).start() 
+                command = self.parse_command(command,tool_settings)
+                output = None
+                send_ack_get_reply(self.id,80, self.server_endereco, self.udp_porta,self.udp_socket)
+                try:
+                    data = None
+                    while True:
+                        data, _ = self.udp_socket.recvfrom(4096)
+                        tipo, _, dados = UDP.desserialize(data)
+                        if tipo == 2:
+                            break
+                    tcp_porta=int(dados)
+                    print("[DEBUG - porta tcp] Porta TCP recebida: ",tcp_porta)
+                    ack_message = UDP(tipo=80, dados="", identificador=self.id, endereco=self.server_endereco, porta=self.udp_porta, socket=self.udp_socket)
+                    ack_message.send_message()
+
+                       # Check if the socket is already connected
+                    if hasattr(self, 'tcp_socket') and self.tcp_socket:
+                        # Close the existing connection if it's not connected to the correct port
+                        self.tcp_socket.close()
+                        self.tcp_socket = None
+                        print("[DEBUG] Existing TCP socket closed.")
+
+                    if not self.tcp_socket:
+                        self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        self.tcp_socket.connect((self.server_endereco, tcp_porta))
+                        print(f"[DEBUG] Connected to TCP port: {tcp_porta}")
+                    if command[0] == 'ping':
+                        output = self.ping_connection(command)
+                    elif command[0] == 'iperf':
+                        output = self.iperf_connection(tool_settings.get('role'),command,tool_settings.get('server_address'))
+                    message = TCP(0, "", self.id, self.server_endereco,tcp_porta, self.tcp_socket)
+                    message.send_message()
+                    tcp_porta = None
+                    metrics = self.get_metrics(command,output)
+                    self.update_metric(metrics)
+                    debug_print(f"[DEBUG - task_manager] Métricas atualizadas: {metrics}")
+                    print(json.dumps(self.metrics, indent=4))
+                    performing_task = False
+                except socket.timeout:
+                    print("Tempo limite atingido ao esperar pelo ACK do servidor. Tentando novamente...")
+                except Exception as e:
+                    print(f"[ERRO - receive_task] Falha ao receber mensagem: {e}")
+                    exc_type, exc_obj, exc_tb = sys.exc_info()
+                    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                    print(exc_type, fname, exc_tb.tb_lineno)
+
+            #metrics_message = UDP(tipo=3, dados=self.metrics, identificador=self.id, endereco=self.server_endereco, porta=self.udp_porta, socket=self.udp_socket)
+            #metrics_message.send_message()
+            self.metrics = {}
+            # Verifica se os thresholds foram ultrapassados
+        except Exception as e:
+            print(f"[ERRO - receive_task] Falha ao receber mensagem: {e}")
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
 
     def monitor_task(self,frequency,alert_conditions, ram_usage, cpu_usage):
         while performing_task:
@@ -355,7 +352,7 @@ class NMS_Agent:
                 if ram_usage and psutil.virtual_memory() > condition.get('ram_usage_threshold'):
                     message = f"Alerta: RAM usage ultrapassou o threshold."
                     print(message)
-                    alert = TCP(tipo=2, dados=message, identificador=self.id, endereco=self.server_endereco, porta=self.tcp_porta, socket=self.tcp_socket)
+                    alert = TCP(tipo=2, dados=message, identificador=self.id, endereco=self.server_endereco, porta="", socket=self.tcp_socket)
                     if alert.send_message():
                         print("Alerta enviado com sucesso.")
                     else:
@@ -462,23 +459,20 @@ class NMS_Agent:
         global debug
         while True:
             print(f"Bem vindo Agente {self.id}")
-            print("1 - Iniciar AlertFlow")
-            print("2 - Iniciar NetTask")
-            print("3 - Debug mode")
+            print("1 - Iniciar NetTask")
+            print("2 - Debug mode")
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
                 break
             elif option == "1":
-                self.connect_to_TCP_server()
-            elif option == "2":
                 self.connect_to_UDP_server()
-            elif option == "3":
+            elif option == "2":
                 debug = not debug
                 print(f"Debug mode {'ativado' if debug else 'desativado'}.")
             else:
                 print("Opção inválida. Tente novamente.")
 
 if __name__ == "__main__":
-    nms_agent = NMS_Agent(server_endereco="10.0.5.10", tcp_porta=9000, udp_porta=5000)
+    nms_agent = NMS_Agent(server_endereco="10.0.5.10", udp_porta=5000)
     nms_agent.run()

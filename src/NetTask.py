@@ -1,7 +1,8 @@
 import socket
 import struct 
 import time
-
+import sys 
+import os 
 debug = True
 
 def debug_print(message):
@@ -14,7 +15,7 @@ class UDP:
     def __init__(self, dados, identificador=None, tipo=None, endereco=None, porta=None, socket=None):
         self.dados = dados.encode('utf-8') if isinstance(dados, str) else dados      # Conteúdo da mensagem
         self.identificador = identificador       # ID do NMS_Agent
-        self.tipo = tipo                         # O tipo da mensagem (1 - Envio de Tarefa,96 - ACK de iperf porta,97 - ACK de metricas,98 - ACK de tarefa,99 - ACK de registo)
+        self.tipo = tipo                         # O tipo da mensagem (1 - Envio de Metricas,2 - Envio de mensagem normal,80 - ACK pedir porta tcp,88 - ACK para avisar que nao ha porta iperf, 96 - ACK de iperf porta, 97 - ACK de metricas, 98 - ACK de tarefa, 99 - ACK de registo)
         self.endereco = endereco                 # Endereço do servidor
         self.porta = porta                       # Porta do servidor
         self.socket = socket if socket else self.create_socket()
@@ -54,7 +55,6 @@ class UDP:
         except Exception as e:
             print(f"Erro ao desserializar a mensagem: {e}")
             return None, None, None
-
 
 
     # Enviar uma mensagem UDP com controle de fluxo e esperar pelo ACK
@@ -102,20 +102,20 @@ class UDP:
     # - Executar testes de monitorização          --> por fazer
     # - Reportar os resultados periodicamente (?) --> por fazer
 
-    # Mensagem de tipo 1 - Registo
+    # Mensagem de registo
     def registo(self):
-        print(f"[NetTask] Registo do NMS_Agent com ID {self.identificador} no NMS_Server...")
+        debug_print(f"[NetTask] Registo do NMS_Agent com ID {self.identificador} no NMS_Server...")
         register_message = UDP("", self.identificador, 1, self.endereco, self.porta)
         register_message.send_message()
 
-    # Mensagem de tipo 99 - ACK
+    # Mensagem de ACK
     def send_ack(self):
-        print('[NetTask] Envio de ACK')
+        debug_print('[NetTask] Envio de ACK')
         self.send_message()
 
-    # Mensagem de tipo 2 - Envio de Tarefa
+    # Mensagem de envio de Tarefa
     def send_task(self):
-        print(f'[NetTask] Envio de Tarefa para {self.endereco}:{self.porta}')
+        debug_print(f'[NetTask] Envio de Tarefa para {self.endereco}:{self.porta}')
         task_message = UDP(self.dados, self.identificador, self.tipo, self.endereco, self.porta,self.socket)
         task_message.send_message()
         
@@ -129,8 +129,18 @@ def send_ack_get_reply(id, tipo, endereco, porta, socket, timeout=5):
             ack_mensagem, _ = socket.recvfrom(1024)
             ack_tipo, _, _ = UDP.desserialize(ack_mensagem)
             if ack_tipo == tipo:
-                print(f"[ACK - send_ack_get_reply] Recebido ack {tipo}")
+                debug_print(f"[ACK - send_ack_get_reply] Recebido ack {tipo}")
                 ack_recebido = True
+            else:
+                debug_print(f"[ERRO - send_ack_get_reply] ACK recebido não corresponde ao esperado")
+                message.send_message()
         except socket.timeout:
-            print(f"[ERRO - send_ack_get_reply] Timeout ao aguardar ACK {tipo}")
+            debug_print(f"[ERRO - send_ack_get_reply] Timeout ao aguardar ACK {tipo}")
+            #send_ack_get_reply(id, tipo, endereco, porta, socket)
+            #return
+        except Exception as e:
+            print(f"[ERRO - receive_task] Falha ao receber mensagem: {e}")
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
     socket.settimeout(None)

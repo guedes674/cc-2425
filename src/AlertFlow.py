@@ -4,7 +4,6 @@ class TCP:
     def __init__(self, tipo, dados, identificador, endereco, porta, socket=None):
         self.tipo = tipo                    
         self.dados = dados.encode('utf-8')  # Conteúdo da mensagem codificado para TCP
-        self.tamanho_dados = len(self.dados)
         self.identificador = identificador  # ID do NMS_Agent
         self.endereco = endereco            # Endereço do servidor
         self.porta = porta                  # Porta do servidor
@@ -29,17 +28,10 @@ class TCP:
         try:
             # Extrai os primeiros campos fixos: tipo, tamanho do identificador e tamanho dos dados
             tipo, tamanho_identificador, tamanho_dados = struct.unpack('!B H H', mensagem_binaria[:5])
-            
-            # Define o formato dinâmico com base nos tamanhos extraídos
             formato = f'{tamanho_identificador}s {tamanho_dados}s'
-            
-            # Extrai os bytes para o identificador e os dados
             id_bytes, dados_bytes = struct.unpack(formato, mensagem_binaria[5:])
-            
-            # Decodifica os bytes para strings, com verificações de vazio
             identificador = id_bytes.decode('utf-8') if id_bytes else "default_id"
             dados = dados_bytes.decode('utf-8') if dados_bytes else ""
-                        
             return tipo, identificador, dados
         except Exception as e:
             print(f"Erro ao desserializar a mensagem: {e}")
@@ -55,6 +47,9 @@ class TCP:
         except Exception as e:
             print(f"Erro ao enviar mensagem: {e}")
 
+    def close_socket(self):
+        self.socket.close()
+        print("Conexão encerrada.")
     # --------------------------------- Mensagens ----------------------------------------------------
 
     # Mensagem de alerta (tipo 2)
@@ -134,3 +129,9 @@ class TCP:
             porta=server_port
         )
         ack_message.send_message()
+
+def send_ack_end_task(server_address, server_port, agent_id):
+    ack_message = TCP(tipo=10, dados="", identificador=agent_id, endereco=server_address, porta=server_port)
+    ack_message.send_message()
+    tipo, identificador, dados = ack_message.receive_message()
+    return tipo, identificador, dados

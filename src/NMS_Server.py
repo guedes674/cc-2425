@@ -1,13 +1,13 @@
-import socket, os, glob, json, struct, threading, re,sys, queue, select
+import socket, os, glob, json, struct, threading, re,sys, queue, select, threading, random
 from AlertFlow import TCP
-from NetTask import UDP
+from NetTask import UDP, send_ack_get_reply
 from Tarefa import Tarefa
 from GUI import MetricsViewer
 
 # Go to right folder 
 # cd ../../../ && cd home/Documents/cc-2425
 
-debug = False
+debug = True
 
 def debug_print(message):
     if debug:
@@ -22,8 +22,7 @@ class NMS_Server:
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.settimeout(None)
         self.udp_started = False
-        self.tcp_started = False
-        self.tcp_threads = []
+        self.tcp_threads = {}
         self.load_tasks_from_json()
         self.task_queue = queue.Queue()
         self.queue_event = threading.Event()
@@ -139,7 +138,7 @@ class NMS_Server:
                             debug_print(f"[DEBUG - dados udp] Dados desserializados - Tipo: {tipo}, Identificador: {identificador}, Dados: {dados}")
                             # Criando o ACK como uma instância UDP
                             if tipo == 99:
-                                ack_message = UDP(dados="", identificador=identificador, tipo=98, endereco=client_address[0], 
+                                ack_message = UDP(dados="", identificador=identificador, tipo=99, endereco=client_address[0], 
                                                     porta=client_address[1], socket=server_socket)
                                 ack_message.send_ack()
 
@@ -147,36 +146,45 @@ class NMS_Server:
                                 self.agents[identificador] = (client_address[0], client_address[1])
                                 print(f"Agentes registrados no servidor: {self.agents}")
                                 debug_print(f"[DEBUG - agentes] Agentes registrados no servidor: {self.agents}")
-                                print(client_address[0])
                                 try :
                                     client_tasks = self.tasks[client_address[0]]
                                     self.distribute_tasks(client_address[0],client_tasks)
                                 except KeyError:
                                     print("Nenhuma tarefa para enviar para este agente")
-                                    ack_message = UDP(dados="", identificador=identificador, tipo=99, endereco=client_address[0], 
+                                    no_task_message = UDP(dados="", identificador=identificador, tipo=2, endereco=client_address[0], 
                                                     porta=client_address[1], socket=server_socket)
-                                    ack_message.send_ack()
+                                    no_task_message.send_ack()
                             elif tipo == 96:
                                 debug_print("[DEBUG] Recebido ack de iperf porta")
                                 ack_message = UDP(dados="", identificador=identificador, tipo=96, endereco=client_address[0], 
                                                     porta=client_address[1], socket=server_socket)
                                 ack_message.send_ack()
+                                
                                 try:
-                                    msg, client_address = server_socket.recvfrom(4096)  # Increased buffer size to 4096 bytes
-                                    if not msg:
-                                        print("Mensagem vazia recebida. Continuando...")
-                                        continue
-
-                                    print(f"Mensagem recebida de {client_address}")
-                                    # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
-                                    tipo, identificador, dados = UDP.desserialize(msg)
+                                    while True :
+                                        msg, client_address = server_socket.recvfrom(4096)  # Increased buffer size to 4096 bytes
+                                        if not msg:
+                                            print("Mensagem vazia recebida. Continuando...")
+                                            continue
+                                        print(f"Mensagem recebida de {client_address}")
+                                        # Desserializar e processar a mensagem recebida de um NMS_Agent via UDP
+                                        tipo, identificador, dados = UDP.desserialize(msg)
+                                        if tipo == 2:
+                                            break
+                                        else :
+                                            print("Not message")
                                     debug_print(f"[DEBUG - dados udp] Dados desserializados - Tipo: {tipo}, Identificador: {identificador}, Dados: {dados}")
                                     iperf_server = self.agents.get(dados)
+                                    if not iperf_server:
+                                        print("Nenhum servidor iperf encontrado")
+                                        send_error_ack = UDP(dados="", identificador=identificador, tipo=88, endereco=client_address[0],
+                                                                porta=client_address[1], socket=server_socket)
+                                        send_error_ack.send_ack()
+                                        continue
                                     print(f"Agentes registrados no servidor: {self.agents}")
                                     ack_iperf = UDP(dados="", identificador=identificador, tipo=96, endereco=client_address[0], 
                                                porta=client_address[1], socket=self.udp_socket)
                                     ack_iperf.send_ack()
-                                    print(f"IPERF SERVER: {iperf_server}")
                                     server = str(iperf_server[1])
                                     ack_message = UDP(dados=server, identificador=identificador, tipo=2, endereco=client_address[0], 
                                                       porta=client_address[1], socket=server_socket)
@@ -185,8 +193,20 @@ class NMS_Server:
                                 except socket.timeout:
                                     print("Tempo limite do socket atingido. Continuando...")
                                     pass
+                            elif tipo == 80:
+                                ack_message = UDP(dados="", identificador=identificador, tipo=80, endereco=client_address[0], 
+                                                    porta=client_address[1], socket=server_socket)
+                                ack_message.send_message()
+                                porta = random.randint(1024, 65535)
+                                print(f"Porta gerada : {porta}")
+                        
+                                threading.Thread(target=self.start_tcp_server, args={porta}, daemon=True).start()
+                                dados = str(porta)
+                                message = UDP(dados=dados, identificador=identificador, tipo=2, endereco=client_address[0], 
+                                                    porta=client_address[1], socket=server_socket)
+                                message.send_message()
                             else :
-                                print("Ack recebido nao e de registo")
+                                print("Ack recebido nao é de registo")
                         except socket.timeout:
                             print("Tempo limite do socket atingido. Continuando...")
                             pass
@@ -199,34 +219,27 @@ class NMS_Server:
         self.task_queue.put(task)
         self.queue_event.set()
 
-    def start_tcp_server(self):
-        """Listens for incoming TCP connections. Must be threaded. Passive method should close the connection, not the socket."""
-        self.tcp_started = True
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-                LOCAL_ADR = "10.0.5.10"
-                server_socket.bind((LOCAL_ADR, 9000))
-                server_socket.listen(5)
-                debug_print("Servidor TCP esperando por conexões de alertas...")
-    
-                while self.tcp_started:
-                    conn, addr = server_socket.accept()
-                    debug_print(f"Conectado por {addr}")
-                    thread = threading.Thread(target=self.handle_connection, args=(conn, addr))
-                    self.tcp_threads.append(thread)
-                    thread.start()
-        except Exception as e:
-            debug_print(f"Error while setting up server on {LOCAL_ADR}:9000: {e}")
-        finally:
-            for thread in self.tcp_threads:
-                thread.join()
-    
-    def handle_connection(self, conn, addr):
-        with conn:
-            msg = conn.recv(1024)
-            if msg:
-                alert_type, device_id, current_value = TCP.deserialize_tcp(msg)
-                debug_print(f"Alerta recebido do dispositivo {device_id}: {alert_type}, Valor atual: {current_value}")
+    def start_tcp_server(self,porta):
+        tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        tcp_socket.settimeout(None)
+        LOCAL_ADR = "10.0.5.10"
+        tcp_socket.bind((LOCAL_ADR, porta))
+        tcp_socket.listen()
+        print(f"Servidor TCP esperando por conexões ...")
+        conn, addr = tcp_socket.accept()
+        print(f"Conexão estabelecida com {addr}")
+        data = conn.recv(4096)
+        self.handle_tcp_client(data, addr)
+
+    def handle_tcp_client(self, data, addr):
+        print(f"Conexão estabelecida com {addr}")
+        tipo, identificador, dados = TCP.deserialize_tcp(data)
+        if tipo == 0: # terminar monitorização e matar thread
+            print(f"Terminando monitorização do {addr}...")
+            exit(0)
+        elif tipo == 1: # precisa de monitorização
+            #alertas
+            pass
 
     def start_gui(self):
         metrics_viewer = MetricsViewer()
@@ -236,32 +249,26 @@ class NMS_Server:
         global debug
         while True:
             print("Iniciando servidor NMS...")
-            print("1 - Iniciar socket TCP")
-            print("2 - Iniciar socket UDP")
-            print("3 - Load new tasks")
-            print("4 - Debug mode")
-            print("5 - GUI")
+            print("1 - Iniciar socket UDP")
+            print("2 - Load new tasks")
+            print("3 - Debug mode")
+            print("4 - GUI")
             print("0 - Sair")
             option = input("Digite a opção desejada: ")
             if option == "0":
                 break
             elif option == "1":
-                if not self.tcp_started:
-                    threading.Thread(target=self.start_tcp_server,daemon=True).start()
-                else:
-                    print("Servidor TCP já está em execução.")
-            elif option == "2":
                 if not self.udp_started:
                     threading.Thread(target=self.start_udp_server,daemon=True).start()
                 else:
                     print("Servidor UDP já está em execução.")
-            elif option == "3":
+            elif option == "2":
                 path = input("Digite o caminho da pasta de tarefas: ")
                 self.load_tasks_from_json(path)
-            elif option == "4":
+            elif option == "3":
                 debug = not debug
                 print(f"Debug mode {'ativado' if debug else 'desativado'}.")
-            elif option == "5":
+            elif option == "4":
                 # Iniciar a GUI em uma thread separada
                 threading.Thread(target=self.start_gui, daemon=True).start()
 
