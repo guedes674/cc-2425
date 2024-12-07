@@ -109,8 +109,7 @@ class NMS_Agent:
         )
         self.tcp_socket = mensagem_registo.socket
         mensagem_registo.send_message()
-    
-        
+
     # No método receive_task do agente
     def receive_task(self):
         debug_print("[DEBUG - receive_task] Aguardando tarefas do NMS_Server...")
@@ -188,13 +187,16 @@ class NMS_Agent:
                 # Desserializar a mensagem recebida para extrair o tipo, identificador e dados
                 tipo, identificador, dados = UDP.desserialize(data)
                 debug_print(f"[DEBUG - receive_task] Tipo: {tipo}, Identificador: {identificador}")
+                print(dados)
                 iperf_porta = dados
                 ack_iperf = UDP(dados="", identificador=self.id, tipo=96, endereco=self.server_endereco, 
                                         porta=self.udp_porta, socket=self.udp_socket)
                 ack_iperf.send_ack()
+                print(f"[DEBUG - receive_task] Iperf porta: {iperf_porta}")
                 # comunicar com agent que vai ser servidor do iperf
+                porta = int(iperf_porta)
                 ack_iperf = UDP(dados="", identificador=self.id, tipo=96, endereco=server_address, 
-                                        porta=int(iperf_porta), socket=self.udp_socket)
+                                        porta=porta, socket=self.udp_socket)
                 ack_iperf.send_ack()
                 try:
                     # Recebe a mensagem e o endereço de onde ela foi enviada
@@ -421,7 +423,7 @@ class NMS_Agent:
         if stdout is None:
             return metrics
 
-        if command == 'ping':
+        if command[0] == 'ping':
             # Parse ping output
             packet_loss_match = re.search(r'(\d+)% packet loss', stdout)
             if packet_loss_match:
@@ -435,7 +437,7 @@ class NMS_Agent:
             
                 debug_print(f"Packet Loss: {packet_loss}%, Average Time: {avg_time} ms")
         
-        elif command == 'iperf':
+        elif command[0] == 'iperf':
             # Parse iperf output
             bandwidth_match = re.search(r'(\d+) Mbits/sec', stdout)
             if bandwidth_match:

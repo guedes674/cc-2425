@@ -14,11 +14,11 @@ class UDP:
     def __init__(self, dados, identificador=None, tipo=None, endereco=None, porta=None, socket=None):
         self.dados = dados.encode('utf-8') if isinstance(dados, str) else dados      # Conteúdo da mensagem
         self.identificador = identificador       # ID do NMS_Agent
-        self.tipo = tipo               # O tipo da mensagem (1 - Envio de Tarefa,96 - ACK de iperf porta,97 - ACK de metricas,98 - ACK de tarefa,99 - ACK de registo)
+        self.tipo = tipo                         # O tipo da mensagem (1 - Envio de Tarefa,96 - ACK de iperf porta,97 - ACK de metricas,98 - ACK de tarefa,99 - ACK de registo)
         self.endereco = endereco                 # Endereço do servidor
         self.porta = porta                       # Porta do servidor
         self.socket = socket if socket else self.create_socket()
-    
+
     def create_socket(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.connect((self.endereco, self.porta))

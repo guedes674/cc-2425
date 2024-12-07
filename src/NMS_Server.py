@@ -177,7 +177,8 @@ class NMS_Server:
                                                porta=client_address[1], socket=self.udp_socket)
                                     ack_iperf.send_ack()
                                     print(f"IPERF SERVER: {iperf_server}")
-                                    ack_message = UDP(dados=str(iperf_server[1]), identificador=identificador, tipo=2, endereco=client_address[0], 
+                                    server = str(iperf_server[1])
+                                    ack_message = UDP(dados=server, identificador=identificador, tipo=2, endereco=client_address[0], 
                                                       porta=client_address[1], socket=server_socket)
                                     ack_message.send_message()
                                     print(f"Enviando iperf server {iperf_server} para {client_address[0]}")
