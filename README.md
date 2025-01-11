@@ -13,5 +13,7 @@
 | Tiago Guedes     | A97369  |
 | Hugo Gomes       | PG57549 |
 
+Nota : 13
+
 </div>
 # CC2425-Grupo-2
